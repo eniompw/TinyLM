@@ -1,34 +1,55 @@
 # TinyLM
 
-TinyLM is a minimal character-level language model built with PyTorch. It trains a small MLP on TinyStories text and then samples new characters autoregressively.
+TinyLM is a small character-level language modeling playground.
 
-The project is intentionally compact so you can understand the full training and generation flow in one script.
+It contains two compact implementations that train on TinyStories text and generate characters autoregressively:
 
-## What is in this repo
+- a NumPy single-layer bigram model
+- a PyTorch MLP model with token + positional embeddings
 
-- `TorchLinear.py`: end-to-end training and sampling script.
+The code is intentionally short so you can read end-to-end training and sampling in one sitting.
+
+## Repository contents
+
+- `TinySLP.py`: NumPy baseline (single linear layer over one-hot inputs).
+- `TorchLinear.py`: PyTorch character model with learned token/position embeddings and a 2-layer MLP head.
 - `TorchLinear.ipynb`: notebook version for interactive experimentation.
 
-## Model summary
+## Models
 
-The script trains a character model with:
+### 1) `TinySLP.py` (NumPy bigram model)
 
-- learned token embeddings
-- learned positional embeddings
-- a 2-layer MLP head
+- Builds one-hot bigram pairs: current character -> next character.
+- Trains a linear classifier with softmax and gradient descent.
+- Streams 100 TinyStories samples.
+- Runs on CPU.
 
-Given a fixed context window of characters, the model predicts the next character.
+### 2) `TorchLinear.py` (PyTorch MLP)
+
+- Uses context windows of length 16 (`block_size`).
+- Learns:
+	- token embeddings
+	- positional embeddings
+	- 2-layer MLP head for next-character prediction
+- Streams 5000 TinyStories samples.
+- Trains for 3000 steps and reports loss every 500 steps.
+- Generates text by sampling from the output distribution.
 
 ## Requirements
 
 - Python 3.10+
-- NVIDIA GPU with CUDA (current script uses `.cuda()` directly)
 - Internet connection for first dataset download
 
 Python packages:
 
-- `torch`
+- `numpy`
 - `datasets`
+- `torch`
+
+Hardware notes:
+
+- `TinySLP.py` is CPU-friendly.
+- `TorchLinear.py` currently calls `.cuda()` directly, so it requires a CUDA-capable GPU as written.
 
 ## Setup
 
@@ -36,25 +57,31 @@ Python packages:
 python -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
-pip install torch datasets
+pip install numpy datasets torch
 ```
 
 ## Run
+
+Run the NumPy baseline:
+
+```bash
+python TinySLP.py
+```
+
+Run the PyTorch model:
 
 ```bash
 python TorchLinear.py
 ```
 
-During training, the script prints loss every 500 steps, then prints a generated sample at the end.
+## Dataset
 
-## Notes
+- Source: `karpathy/tinystories-gpt4-clean` via Hugging Face Datasets (streaming mode).
+- Tokenization is character-level, keeping the project simple and educational.
 
-- Dataset source: `karpathy/tinystories-gpt4-clean` (streamed via Hugging Face Datasets).
-- Training data in the script is limited to the first 5000 streamed stories.
-- Tokenization is character-level, so output quality is simple but useful for learning.
+## Suggested next improvements
 
-## Next improvements
-
-- Add CPU fallback (`device = torch.device("cuda" if torch.cuda.is_available() else "cpu")`).
-- Move hyperparameters to command-line args.
-- Save and reload model checkpoints.
+- Add device fallback (`cuda`/`cpu`) to `TorchLinear.py`.
+- Expose hyperparameters through command-line arguments.
+- Add checkpoint save/load support.
+- Add deterministic seeding and simple evaluation metrics.
