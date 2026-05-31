@@ -4,8 +4,9 @@ TinyLM is a small character-level language modeling playground.
 
 Conceptually, it sits about halfway between [MLP-Digits-Classifier](https://github.com/eniompw/MLP-Digits-Classifier) and [MicroGPT](https://github.com/eniompw/MicroGPT).
 
-It contains two compact implementations that train on TinyStories text and generate characters autoregressively:
+It contains three compact implementations that train character-level models and generate text autoregressively:
 
+- a NumPy single-layer perceptron baseline for names generation
 - a CuPy character MLP with learned embeddings
 - a PyTorch MLP model with token + positional embeddings
 
@@ -24,17 +25,25 @@ The code is intentionally short so you can read end-to-end training and sampling
 
 ## Repository contents
 
+- `nameSLP.py`: NumPy single-layer perceptron trained on character windows from the names dataset.
+- `names_dataset.py`: Karpathy names data loader with character encoding and one-hot context features.
 - `TinyMLP.py`: CuPy character MLP with a learned embedding table and one hidden layer.
+- `tinystories_dataset.py`: shared TinyStories data loader and character-level preprocessing utility.
 - `TinyMLP.ipynb`: notebook version of the CuPy model.
 - `TinyMLP explained.md`: a short walkthrough of `TinyMLP.py`, including data flow, tensor shapes, and manual gradient steps.
 - `TorchLinear.py`: PyTorch character model with learned token/position embeddings and a 2-layer MLP head.
 - `TorchLinear.ipynb`: notebook version for interactive experimentation.
-- `tinystories_dataset.py`: shared TinyStories data loader and character-level preprocessing utility.
-- `names_dataset.py`: Karpathy names data loader with character encoding and one-hot context features.
 
 ## Models
 
-### 1) `TinyMLP.py` (CuPy character MLP)
+### 1) `nameSLP.py` (NumPy SLP baseline)
+
+- Uses context windows of length 4 (`context_size`).
+- Trains a single linear softmax classifier with gradient descent.
+- Uses one-hot flattened context features from the names dataset.
+- Prints periodic training accuracy and samples generated character sequences.
+
+### 2) `TinyMLP.py` (CuPy character MLP)
 
 - Uses context windows of length 4 (`context_size`).
 - Learns character embeddings, a ReLU hidden layer, and an output projection.
@@ -43,7 +52,7 @@ The code is intentionally short so you can read end-to-end training and sampling
 - Uses vectorized embedding-gradient accumulation instead of a Python loop.
 - Generates text autoregressively from the trained model.
 
-### 2) `TorchLinear.py` (PyTorch MLP)
+### 3) `TorchLinear.py` (PyTorch MLP)
 
 - Uses context windows of length 16 (`block_size`).
 - Learns:
@@ -88,6 +97,7 @@ pip install cupy-cuda12x
 ```bash
 git clone https://github.com/eniompw/TinyLM.git
 cd TinyLM
+python nameSLP.py
 python TinyMLP.py
 python TorchLinear.py
 ```
@@ -105,6 +115,12 @@ pip install cupy-cuda12x
 
 ## Run
 
+Run the NumPy SLP baseline:
+
+```bash
+python nameSLP.py
+```
+
 Run the CuPy MLP:
 
 ```bash
@@ -119,8 +135,8 @@ python TorchLinear.py
 
 ## Dataset
 
-- Source: `karpathy/tinystories-gpt4-clean` via Hugging Face Datasets (streaming mode).
 - Source: `names.txt` from `karpathy/makemore` (downloaded directly from GitHub).
+- Source: `karpathy/tinystories-gpt4-clean` via Hugging Face Datasets (streaming mode).
 - Tokenization is character-level, keeping the project simple and educational.
 
 ## Suggested next improvements
