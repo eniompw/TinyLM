@@ -87,6 +87,16 @@ python TorchLinear.py
 - Source: `karpathy/tinystories-gpt4-clean` via Hugging Face Datasets (streaming mode).
 - Tokenization is character-level, keeping the project simple and educational.
 
+## TinyMLP experiment summary (concise)
+
+- Recommended default: **Context = 4, Hidden Size = 150** (48.3%, 24.3s).
+- Faster but weaker: 4/100 (46.8%, 20.3s).
+- Context plateau: increasing context from 4 to 10 gives only +0.3% accuracy (48.3% -> 48.6%).
+- Efficiency trade-off: that +0.3% costs +20% training time (24.3s -> 29.2s).
+- Context scaling at hidden size 150: 2/150 = 41.1% (23.2s), 4/150 = 48.3% (24.3s), 10/150 = 48.6% (29.2s).
+- Overly large context degrades practicality: 15/200 = 48.2% (40.2s).
+- Takeaway: for this MLP, better gains likely require architectural changes (depth/optimizer/attention), not just larger context or hidden size.
+
 ## Suggested next improvements
 
 - Add CPU/NumPy fallback to `TinyMLP.py` for non-CUDA environments.
