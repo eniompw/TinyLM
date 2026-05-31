@@ -36,7 +36,40 @@ This file tracks training accuracy for language model experiments run on Google 
 | TinyMLP.py | 59.4% | 2000 | 3.9s |
 | TorchMLP.py | 62.4% | 2000 | 3.6s |
 | TinyTransformer.py | 68.5% | 2000 | 29.2s |
+| TinyTransformer.py (`context_size=8`, latest run) | 67.4% | 1600 | 25.4s |
+| TinyTransformer.py (`context_size=64`) | 68.5% | 1800 | 197.5s |
 | microgpt_lite.py | 79.4% | 3500 | 202.0s |
+
+## Transformer Experiment Notes
+
+- `5000` TinyStories often causes CUDA OOM/crash in this setup.
+- Increasing transformer context window to `64` made training much slower, with only a small accuracy gain in this pair of runs.
+
+### TinyTransformer Context Size Accuracy Comparison
+
+| Epoch | `context_size=8` | `context_size=64` |
+|---:|---:|---:|
+| 0 | 19.8% | 19.0% |
+| 200 | 55.7% | 55.5% |
+| 400 | 59.4% | 58.4% |
+| 600 | 60.7% | 61.3% |
+| 800 | 62.7% | 64.4% |
+| 1000 | 63.1% | 64.8% |
+| 1200 | 66.3% | 64.4% |
+| 1400 | 66.8% | 68.3% |
+| 1600 | 67.4% | 67.6% |
+| 1800 | 66.9% | 68.5% |
+| 2000 | 67.0% | 68.4% |
+
+Training time:
+
+- `context_size=8`: `25.4s`
+- `context_size=64`: `197.5s`
+
+Quick comparison:
+
+- Best accuracy: `67.4%` (`context_size=8`) vs `68.5%` (`context_size=64`) -> `+1.1` points.
+- Training time: `25.4s` (`context_size=8`) vs `197.5s` (`context_size=64`) -> about `7.8x` slower at `context_size=64`.
 
 ## Generated Samples
 

@@ -16,8 +16,9 @@ Research source for optimization ideas: https://github.com/eniompw/MicroGPT
 5. [Speed optimizations](#speed-optimizations)
 6. [Accuracy and quality optimizations](#accuracy-and-quality-optimizations)
 7. [Generation behavior](#generation-behavior)
-8. [Why this version is stronger than TorchMLP](#why-this-version-is-stronger-than-torchmlp)
-9. [Short summary](#short-summary)
+8. [Practical scaling notes](#practical-scaling-notes)
+9. [Why this version is stronger than TorchMLP](#why-this-version-is-stronger-than-torchmlp)
+10. [Short summary](#short-summary)
 
 ## What stays the same from TorchMLP
 
@@ -213,6 +214,31 @@ Main differences are:
 - context length is 8 instead of 4
 - transformer encoder replaces MLP forward pass
 - temperature scaling (`/ 0.7`) improves output readability
+
+## Practical scaling notes
+
+Recent experiments highlight practical limits for this compact setup:
+
+- Using `5000` TinyStories can sometimes crash CUDA (typically memory pressure).
+- Increasing `context_size` to `64` makes training much slower.
+- Accuracy gain versus `context_size=8` is modest relative to the runtime cost in these runs.
+
+Observed run (`context_size=8`):
+
+- best accuracy: `67.4%` at epoch `1600`
+- final accuracy: `67.0%` at epoch `2000`
+- training time: `25.4s`
+
+Observed run (`context_size=64`):
+
+- best accuracy: `68.5%` at epoch `1800`
+- final accuracy: `68.4%` at epoch `2000`
+- training time: `197.5s`
+
+Direct comparison:
+
+- best accuracy delta (`64 - 8`): `+1.1` points
+- training time ratio (`64 / 8`): about `7.8x` slower
 
 ## Why this version is stronger than TorchMLP
 
