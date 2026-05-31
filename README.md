@@ -29,6 +29,7 @@ The code is intentionally short so you can read end-to-end training and sampling
 - `TinyMLP explained.md`: a short walkthrough of `TinyMLP.py`, including data flow, tensor shapes, and manual gradient steps.
 - `TorchLinear.py`: PyTorch character model with learned token/position embeddings and a 2-layer MLP head.
 - `TorchLinear.ipynb`: notebook version for interactive experimentation.
+- `tinystories_dataset.py`: shared TinyStories data loader and character-level preprocessing utility.
 
 ## Models
 
