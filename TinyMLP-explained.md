@@ -49,8 +49,7 @@ From that text, the script builds a character vocabulary:
 ```python
 vocab = sorted(set(text))
 vocab_size = len(vocab)
-char_to_idx = {c: i for i, c in enumerate(vocab)}
-idx_to_char = {i: c for i, c in enumerate(vocab)}
+char_to_id = {c: i for i, c in enumerate(vocab)}
 ```
 
 This makes the task purely character-level. Every unique character gets an integer ID.
@@ -73,9 +72,9 @@ The code then:
 For every position in the text, the input is the previous 4 characters and the target is the next character. The script encodes the text as integer IDs and then builds:
 
 ```python
-data = [char_to_idx[c] for c in text]
-inputs = cp.array([data[i:i+context_size] for i in range(len(data)-context_size)])
-targets = cp.array(data[context_size:])
+encoded = [char_to_id[c] for c in text]
+inputs = cp.array([encoded[i:i+context_size] for i in range(len(encoded)-context_size)])
+targets = cp.array(encoded[context_size:])
 ```
 
 So the model learns the question: given 4 characters, what character comes next?
@@ -87,7 +86,7 @@ The model is a small feed-forward network with learned character embeddings.
 ### Embedding table
 
 ```python
-C = r(vocab_size, emb_dim)
+C = randn(vocab_size, emb_dim)
 ```
 
 Each character ID maps to a learned vector of size `emb_dim = 256`. For a 4-character context, the 4 embedding vectors are concatenated into one long feature vector.
@@ -95,7 +94,7 @@ Each character ID maps to a learned vector of size `emb_dim = 256`. For a 4-char
 ### Hidden layer
 
 ```python
-W1 = r(context_size * emb_dim, hidden_size)
+W1 = randn(context_size * emb_dim, hidden_size)
 ```
 
 The concatenated embeddings are projected into a hidden layer of size `hidden_size = 150`, then passed through ReLU. There are no bias terms in this version of the model.
@@ -103,7 +102,7 @@ The concatenated embeddings are projected into a hidden layer of size `hidden_si
 ### Output layer
 
 ```python
-W2 = r(hidden_size, vocab_size)
+W2 = randn(hidden_size, vocab_size)
 ```
 
 The hidden activations are mapped to a logit for every character in the vocabulary. After softmax, those logits become probabilities for the next character.
@@ -160,9 +159,8 @@ What happens here:
 The gradient for cross-entropy with softmax is simplified by directly subtracting 1 at the target index:
 
 ```python
-dlogits = probs.copy()
-dlogits[cp.arange(batch_size), Y] -= 1
-dlogits /= batch_size
+probs[cp.arange(batch_size), Y] -= 1
+probs /= batch_size
 ```
 
 From there, gradients are computed for each parameter by the chain rule:
