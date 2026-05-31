@@ -11,6 +11,17 @@ It contains two compact implementations that train on TinyStories text and gener
 
 The code is intentionally short so you can read end-to-end training and sampling in one sitting.
 
+## Contents
+
+- [Repository contents](#repository-contents)
+- [Models](#models)
+- [Requirements](#requirements)
+- [Colab (T4) quick start](#colab-t4-quick-start)
+- [Setup](#setup)
+- [Run](#run)
+- [Dataset](#dataset)
+- [Suggested next improvements](#suggested-next-improvements)
+
 ## Repository contents
 
 - `TinyMLP.py`: CuPy character MLP with a learned embedding table and one hidden layer.
