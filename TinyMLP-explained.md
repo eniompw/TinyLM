@@ -29,7 +29,7 @@ At a high level, the script:
 
 ## Imports and setup
 
-The script imports `load_tinystories` from `tinystories_dataset.py` for data preparation, `time` for timing, and `warnings` to silence warnings. It uses `cupy` as `cp` for GPU arrays and `numpy` as `np` for sampling.
+The script imports `load_tinystories` from `tinystories_dataset.py` for data preparation and `time` for timing. It uses `cupy` as `cp` for GPU arrays and `numpy` as `np` for sampling.
 
 The `softmax` helper converts raw logits into probabilities. It subtracts the row-wise max before exponentiating, which improves numerical stability.
 
@@ -38,11 +38,12 @@ The `softmax` helper converts raw logits into probabilities. It subtracts the ro
 Data preparation is delegated to the shared loader:
 
 ```python
-context_size = 4
-inputs, targets, vocab, encoded = load_tinystories(num_records=200, context_size=context_size)
+block_size = 4
+raw_in, raw_out, vocab, encoded_text = load_tinystories(num_stories=200, context_size=block_size)
+inputs, targets = cp.array(raw_in), cp.array(raw_out)
 ```
 
-`load_tinystories(...)` streams TinyStories from Hugging Face (`karpathy/tinystories-gpt4-clean`), keeps the first 200 records, builds the character vocabulary, encodes the text, and returns CuPy-ready training arrays.
+`load_tinystories(...)` streams TinyStories from Hugging Face (`karpathy/tinystories-gpt4-clean`), keeps the first 200 records, builds the character vocabulary, and encodes the text. The loader returns Python lists, which `TinyMLP.py` converts to CuPy arrays before training.
 
 Inside `tinystories_dataset.py`, the vocabulary construction is:
 
@@ -73,8 +74,8 @@ For every position in the text, the input is the previous 4 characters and the t
 
 ```python
 encoded = [char_to_id[c] for c in text]
-inputs = cp.array([encoded[i:i+context_size] for i in range(len(encoded)-context_size)])
-targets = cp.array(encoded[context_size:])
+inputs = [encoded[i:i+context_size] for i in range(len(encoded)-context_size)]
+targets = encoded[context_size:]
 ```
 
 So the model learns the question: given 4 characters, what character comes next?
