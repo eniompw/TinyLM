@@ -17,8 +17,6 @@ The code is intentionally short so you can read end-to-end training and sampling
 - [Repository contents](#repository-contents)
 - [Models](#models)
 - [Requirements](#requirements)
-- [Setup](#setup)
-- [Run](#run)
 - [Accuracy tracker](#accuracy-tracker)
 - [Dataset](#dataset)
 - [Suggested next improvements](#suggested-next-improvements)
@@ -81,37 +79,6 @@ Hardware notes:
 
 - `TinyMLP.py` uses CuPy, so it expects a compatible CUDA setup.
 - `TorchMLP.py` auto-selects `cuda` when available and otherwise runs on `cpu`.
-
-## Setup
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install numpy datasets torch
-# Install a CuPy build that matches your CUDA version, for example:
-pip install cupy-cuda12x
-```
-
-## Run
-
-Run the NumPy SLP baseline:
-
-```bash
-python nameSLP.py
-```
-
-Run the CuPy MLP:
-
-```bash
-python TinyMLP.py
-```
-
-Run the PyTorch model:
-
-```bash
-python TorchMLP.py
-```
 
 ## Accuracy tracker
 
