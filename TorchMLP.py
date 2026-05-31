@@ -6,7 +6,7 @@ from tinystories_dataset import load_tinystories
 torch.set_default_device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # --- Data & Tokenization ---
-inputs, targets, vocab, enc = load_tinystories(num_records=200, context_size=4)         # 4 is block_size (previous chars to predict next)
+inputs, targets, vocab, encoded_text = load_tinystories(num_stories=200, context_size=4)# 4 is block_size (previous chars to predict next)
 inputs, targets = torch.tensor(inputs), torch.tensor(targets)                           # convert to tensors
 
 # --- Model ---
@@ -22,13 +22,13 @@ optimizer = torch.optim.SGD(list(embed.parameters()) + list(model.parameters()),
 batch_size = 1024                                                                       # number of samples per batch
 start = time.time()                                                                     # track training duration
 for epoch in range(2001):
-    idx = torch.randint(0, len(inputs), (batch_size,))                                  # random batch indices (len(inputs) is total examples)
-    X, Y = inputs[idx], targets[idx]                                                    # fetch random mini-batch (inputs and labels)
+    batch_indices = torch.randint(0, len(inputs), (batch_size,))                        # random batch indices (len(inputs) is total examples)
+    batch_inputs, batch_targets = inputs[batch_indices], targets[batch_indices]         # fetch random mini-batch (inputs and labels)
 
     # Forward pass
-    emb = embed(X).view(batch_size, -1)                                                 # concatenate embeddings for the window
+    emb = embed(batch_inputs).view(batch_size, -1)                                      # concatenate embeddings for the window
     logits = model(emb)                                                                 # forward pass through linear layers
-    loss = F.cross_entropy(logits, Y)                                                   # computes softmax and cross-entropy loss automatically
+    loss = F.cross_entropy(logits, batch_targets)                                       # computes softmax and cross-entropy loss automatically
 
     # Backward pass
     optimizer.zero_grad()                                                               # zero out gradients for the next iteration
@@ -44,12 +44,12 @@ print(f"Training time: {time.time() - start:.1f}s")
 
 # --- Generate ---
 @torch.no_grad()                                                                        # disable autograd tracking during inference
-def generate(num_chars=200, ctx=list(enc[:4])):                                         # start with true initial context (4 chars)
-    out = [vocab[i] for i in ctx]                                                       # decode initial context to string
+def generate(num_chars=200, context=list(encoded_text[:4])):                            # start with true initial context (4 chars)
+    generated_text = [vocab[i] for i in context]                                        # decode initial context to string
     for _ in range(num_chars):
-        p = torch.softmax(model(embed(torch.tensor([ctx])).view(1, -1)), 1)             # fused forward pass
-        next_id = torch.multinomial(p, 1).item()                                        # randomly sample from predicted distribution
-        ctx, out = ctx[1:] + [next_id], out + [vocab[next_id]]                          # slide window forward and append string
-    return ''.join(out)
+        probabilities = torch.softmax(model(embed(torch.tensor([context])).view(1, -1)), 1) # fused forward pass
+        next_id = torch.multinomial(probabilities, 1).item()                            # randomly sample from predicted distribution
+        context, generated_text = context[1:] + [next_id], generated_text + [vocab[next_id]] # slide window forward and append string
+    return ''.join(generated_text)
 
 print(generate())
