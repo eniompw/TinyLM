@@ -30,6 +30,7 @@ The code is intentionally short so you can read end-to-end training and sampling
 - `TorchLinear.py`: PyTorch character model with learned token/position embeddings and a 2-layer MLP head.
 - `TorchLinear.ipynb`: notebook version for interactive experimentation.
 - `tinystories_dataset.py`: shared TinyStories data loader and character-level preprocessing utility.
+- `names_dataset.py`: Karpathy names data loader with character encoding and one-hot context features.
 
 ## Models
 
@@ -119,6 +120,7 @@ python TorchLinear.py
 ## Dataset
 
 - Source: `karpathy/tinystories-gpt4-clean` via Hugging Face Datasets (streaming mode).
+- Source: `names.txt` from `karpathy/makemore` (downloaded directly from GitHub).
 - Tokenization is character-level, keeping the project simple and educational.
 
 ## Suggested next improvements
