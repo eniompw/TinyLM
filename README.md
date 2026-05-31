@@ -14,6 +14,7 @@ The code is intentionally short so you can read end-to-end training and sampling
 ## Repository contents
 
 - `TinyMLP.py`: CuPy character MLP with a learned embedding table and one hidden layer.
+- `TinyMLP.ipynb`: notebook version of the CuPy model.
 - `TorchLinear.py`: PyTorch character model with learned token/position embeddings and a 2-layer MLP head.
 - `TorchLinear.ipynb`: notebook version for interactive experimentation.
 
@@ -22,7 +23,7 @@ The code is intentionally short so you can read end-to-end training and sampling
 ### 1) `TinyMLP.py` (CuPy character MLP)
 
 - Uses context windows of length 3 (`context_size`).
-- Learns character embeddings, a tanh hidden layer, and an output projection.
+- Learns character embeddings, a ReLU hidden layer, and an output projection.
 - Streams 200 TinyStories samples.
 - Trains with manual forward/backward passes in CuPy using `float32` weights.
 - Uses vectorized embedding-gradient accumulation instead of a Python loop.
@@ -54,7 +55,7 @@ Python packages:
 Hardware notes:
 
 - `TinyMLP.py` uses CuPy, so it expects a compatible CUDA setup.
-- `TorchLinear.py` currently calls `.cuda()` directly, so it requires a CUDA-capable GPU as written.
+- `TorchLinear.py` currently calls `.cuda()` directly on tensors/modules, so it requires a CUDA-capable GPU as written.
 
 ## Setup
 
