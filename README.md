@@ -17,9 +17,9 @@ The code is intentionally short so you can read end-to-end training and sampling
 - [Repository contents](#repository-contents)
 - [Models](#models)
 - [Requirements](#requirements)
-- [Colab (T4) quick start](#colab-t4-quick-start)
 - [Setup](#setup)
 - [Run](#run)
+- [Accuracy tracker](#accuracy-tracker)
 - [Dataset](#dataset)
 - [Suggested next improvements](#suggested-next-improvements)
 
@@ -82,27 +82,6 @@ Hardware notes:
 - `TinyMLP.py` uses CuPy, so it expects a compatible CUDA setup.
 - `TorchMLP.py` auto-selects `cuda` when available and otherwise runs on `cpu`.
 
-## Colab (T4) quick start
-
-1. In Colab, open Runtime -> Change runtime type -> Hardware accelerator -> `T4 GPU`.
-2. Install dependencies:
-
-```bash
-pip install --upgrade pip
-pip install datasets torch
-pip install cupy-cuda12x
-```
-
-3. Clone and run:
-
-```bash
-git clone https://github.com/eniompw/TinyLM.git
-cd TinyLM
-python nameSLP.py
-python TinyMLP.py
-python TorchMLP.py
-```
-
 ## Setup
 
 ```bash
@@ -133,6 +112,10 @@ Run the PyTorch model:
 ```bash
 python TorchMLP.py
 ```
+
+## Accuracy tracker
+
+Training accuracy snapshots and generated sample comparisons are tracked in [model_accuracy_tracker.md](model_accuracy_tracker.md).
 
 ## Dataset
 
