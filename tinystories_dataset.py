@@ -1,5 +1,6 @@
 from datasets import load_dataset
-import itertools
+import warnings, itertools
+warnings.filterwarnings('ignore')
 
 def load_tinystories(num_stories=200, context_size=4):
     """
