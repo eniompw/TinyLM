@@ -47,6 +47,7 @@ The code is intentionally short so you can read end-to-end training and sampling
 
 - Uses context windows of length 4 (`context_size`).
 - Loads TinyStories data via `load_tinystories(...)` from `tinystories_dataset.py`.
+- Uses `num_stories=200` to choose how many streamed TinyStories records to train on.
 - Learns character embeddings, a ReLU hidden layer, and an output projection.
 - Streams 200 TinyStories samples.
 - Trains with manual forward/backward passes in CuPy using `float32` weights and mini-batches.
@@ -57,6 +58,7 @@ The code is intentionally short so you can read end-to-end training and sampling
 
 - Uses context windows of length 4 (`context_size`).
 - Loads TinyStories data via `load_tinystories(...)` from `tinystories_dataset.py`.
+- Uses `num_stories=200` to choose how many streamed TinyStories records to train on.
 - Uses the same embedding -> ReLU hidden -> output projection architecture as `TinyMLP.py`.
 - Trains with PyTorch autograd and SGD-style parameter updates.
 - Uses automatic device selection (`cuda` when available, otherwise `cpu`).

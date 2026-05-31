@@ -2,7 +2,7 @@ from datasets import load_dataset
 import itertools
 import cupy as cp
 
-def load_tinystories(num_records=200, context_size=4):
+def load_tinystories(num_stories=200, context_size=4):
     """
     Fetches the TinyStories dataset and prepares it for a character-level language model.
     
@@ -14,7 +14,7 @@ def load_tinystories(num_records=200, context_size=4):
     """
     # Fetch data
     dataset = load_dataset('karpathy/tinystories-gpt4-clean', split='train', streaming=True)
-    text = ''.join(s['text'] for s in itertools.islice(dataset, num_records))
+    text = ''.join(s['text'] for s in itertools.islice(dataset, num_stories))
 
     # Build vocabulary and tokenize
     vocab = sorted(set(text))                                       # ordered list of unique characters
