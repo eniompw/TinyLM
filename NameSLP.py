@@ -1,3 +1,4 @@
+import time
 from names_dataset import load_names
 import numpy as np
 
@@ -18,6 +19,7 @@ b = np.zeros((1, vocab_size))                                   # biases for eac
 learning_rate = 5.0                                             # step size for gradient descent
 
 # --- Train ---
+start = time.time()                                             # track training duration
 for epoch in range(1001):
     probs = softmax(X @ W + b)                                  # forward pass
     dlogits = (probs - y_one_hot) / len(X)                      # cross-entropy + softmax gradient
@@ -27,6 +29,8 @@ for epoch in range(1001):
     if epoch % 200 == 0:
         acc = np.mean(probs.argmax(1) == y)                     # calculate exact match accuracy
         print(f"Epoch {epoch:4d} | Acc: {acc:.1%}")
+
+print(f"Training time: {time.time() - start:.1f}s")
 
 # --- Generate ---
 ctx = X[0].reshape(context_size, vocab_size).argmax(1).tolist() # extract first 6 chars from X[0] to use as seed
