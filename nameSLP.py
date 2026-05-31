@@ -1,4 +1,4 @@
-from data_loader import load_names
+from names_dataset import load_names
 import numpy as np
 
 def softmax(x):

@@ -30,7 +30,7 @@ The code is intentionally short so you can read end-to-end training and sampling
 - `TinyMLP.py`: CuPy character MLP with a learned embedding table and one hidden layer.
 - `tinystories_dataset.py`: shared TinyStories data loader and character-level preprocessing utility.
 - `TinyMLP.ipynb`: notebook version of the CuPy model.
-- `TinyMLP explained.md`: a short walkthrough of `TinyMLP.py`, including data flow, tensor shapes, and manual gradient steps.
+- `TinyMLP-explained.md`: a short walkthrough of `TinyMLP.py`, including data flow, tensor shapes, and manual gradient steps.
 - `TorchLinear.py`: PyTorch character model with learned token/position embeddings and a 2-layer MLP head.
 - `TorchLinear.ipynb`: notebook version for interactive experimentation.
 
@@ -38,7 +38,8 @@ The code is intentionally short so you can read end-to-end training and sampling
 
 ### 1) `nameSLP.py` (NumPy SLP baseline)
 
-- Uses context windows of length 4 (`context_size`).
+- Uses context windows of length 6 (`context_size`).
+- Loads names data via `load_names(...)` from `names_dataset.py`.
 - Trains a single linear softmax classifier with gradient descent.
 - Uses one-hot flattened context features from the names dataset.
 - Prints periodic training accuracy and samples generated character sequences.
@@ -46,6 +47,7 @@ The code is intentionally short so you can read end-to-end training and sampling
 ### 2) `TinyMLP.py` (CuPy character MLP)
 
 - Uses context windows of length 4 (`context_size`).
+- Loads TinyStories data via `load_tinystories(...)` from `tinystories_dataset.py`.
 - Learns character embeddings, a ReLU hidden layer, and an output projection.
 - Streams 200 TinyStories samples.
 - Trains with manual forward/backward passes in CuPy using `float32` weights and mini-batches.
@@ -59,7 +61,7 @@ The code is intentionally short so you can read end-to-end training and sampling
 	- token embeddings
 	- positional embeddings
 	- 2-layer MLP head for next-character prediction
-- Streams 5000 TinyStories samples.
+- Streams 5000 TinyStories samples directly with Hugging Face `load_dataset(...)`.
 - Trains for 3000 steps and reports loss every 500 steps.
 - Generates text by sampling from the output distribution.
 
@@ -137,6 +139,7 @@ python TorchLinear.py
 
 - Source: `names.txt` from `karpathy/makemore` (downloaded directly from GitHub).
 - Source: `karpathy/tinystories-gpt4-clean` via Hugging Face Datasets (streaming mode).
+- Helper loaders: `names_dataset.py` (for `nameSLP.py`) and `tinystories_dataset.py` (for `TinyMLP.py`).
 - Tokenization is character-level, keeping the project simple and educational.
 
 ## Suggested next improvements

@@ -21,7 +21,7 @@ This file walks through [TinyMLP.py](TinyMLP.py) from top to bottom. The script 
 
 At a high level, the script:
 
-1. Loads a stream of TinyStories examples from Hugging Face Datasets.
+1. Loads TinyStories through a shared data loader (`load_tinystories`) in `tinystories_dataset.py`.
 2. Builds a character vocabulary from the first 200 stories.
 3. Converts the text into fixed-size context windows of 4 characters.
 4. Trains a tiny MLP to predict the next character from that context.
@@ -29,22 +29,22 @@ At a high level, the script:
 
 ## Imports and setup
 
-The script imports `load_dataset` for data access, `itertools` for slicing the stream, `time` for timing, and `warnings` to silence warnings. It uses `cupy` as `cp` for GPU arrays and `numpy` as `np` for sampling.
+The script imports `load_tinystories` from `tinystories_dataset.py` for data preparation, `time` for timing, and `warnings` to silence warnings. It uses `cupy` as `cp` for GPU arrays and `numpy` as `np` for sampling.
 
 The `softmax` helper converts raw logits into probabilities. It subtracts the row-wise max before exponentiating, which improves numerical stability.
 
 ## Data preparation
 
-The dataset is loaded in streaming mode:
+Data preparation is delegated to the shared loader:
 
 ```python
-dataset = load_dataset('karpathy/tinystories-gpt4-clean', split='train', streaming=True)
-text = ''.join(s['text'] for s in itertools.islice(dataset, 200))
+context_size = 4
+inputs, targets, vocab, encoded = load_tinystories(num_records=200, context_size=context_size)
 ```
 
-Only the first 200 stories are used. This keeps the experiment small and fast.
+`load_tinystories(...)` streams TinyStories from Hugging Face (`karpathy/tinystories-gpt4-clean`), keeps the first 200 records, builds the character vocabulary, encodes the text, and returns CuPy-ready training arrays.
 
-From that text, the script builds a character vocabulary:
+Inside `tinystories_dataset.py`, the vocabulary construction is:
 
 ```python
 vocab = sorted(set(text))
@@ -52,7 +52,7 @@ vocab_size = len(vocab)
 char_to_id = {c: i for i, c in enumerate(vocab)}
 ```
 
-This makes the task purely character-level. Every unique character gets an integer ID.
+This keeps the task purely character-level. Every unique character gets an integer ID.
 
 ### Context windows
 
@@ -69,7 +69,7 @@ The code then:
 3. Builds `targets` as the next character after each window.
 4. Uses the target IDs directly for cross-entropy training.
 
-For every position in the text, the input is the previous 4 characters and the target is the next character. The script encodes the text as integer IDs and then builds:
+For every position in the text, the input is the previous 4 characters and the target is the next character. The loader encodes text IDs and builds:
 
 ```python
 encoded = [char_to_id[c] for c in text]

@@ -1,5 +1,6 @@
-from datasets import load_dataset
-import itertools, warnings, time, cupy as cp, numpy as np
+import warnings, time, cupy as cp, numpy as np
+from tinystories_dataset import load_tinystories
+
 warnings.filterwarnings('ignore')
 
 def softmax(logits):                                            # converts raw network outputs to probabilities
@@ -7,18 +8,10 @@ def softmax(logits):                                            # converts raw n
     return e / e.sum(axis=1, keepdims=True)                     # normalize so all probabilities sum to 1
 
 # --- Data & Tokenization ---
-dataset = load_dataset('karpathy/tinystories-gpt4-clean', split='train', streaming=True)
-text = ''.join(s['text'] for s in itertools.islice(dataset, 200))
-
-vocab = sorted(set(text))                                       # ordered list of unique characters
-vocab_size = len(vocab)                                         # total count of unique characters
-char_to_id = {c: i for i, c in enumerate(vocab)}                # dictionary mapping char to integer id
-encoded = [char_to_id[c] for c in text]                         # map entire text to integer sequence
-
-# --- Dataset Prep ---
 context_size = 4                                                # number of previous chars used to predict next
-inputs  = cp.array([encoded[i:i+context_size] for i in range(len(encoded)-context_size)]) # sliding windows
-targets = cp.array(encoded[context_size:])                                                # next char to predict
+inputs, targets, vocab, encoded = load_tinystories(num_records=200, context_size=context_size)
+
+vocab_size = len(vocab)                                         # total count of unique characters
 N = len(inputs)                                                 # total number of training examples
 
 # --- Model ---
