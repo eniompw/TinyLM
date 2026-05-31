@@ -2,7 +2,7 @@
 
 TinyLM is a small character-level language modeling playground.
 
-Conceptually, it sits about halfway between [MLP-Digits-Classifier](https://github.com/eniompw/MLP-Digits-Classifier) and [microgpt](https://github.com/eniompw/microgpt).
+Conceptually, it sits about halfway between [MLP-Digits-Classifier](https://github.com/eniompw/MLP-Digits-Classifier) and [MicroGPT](https://github.com/eniompw/MicroGPT).
 
 It contains two compact implementations that train on TinyStories text and generate characters autoregressively:
 
@@ -24,7 +24,8 @@ The code is intentionally short so you can read end-to-end training and sampling
 - Uses context windows of length 3 (`context_size`).
 - Learns character embeddings, a tanh hidden layer, and an output projection.
 - Streams 200 TinyStories samples.
-- Trains with manual forward/backward passes in CuPy.
+- Trains with manual forward/backward passes in CuPy using `float32` weights.
+- Uses vectorized embedding-gradient accumulation instead of a Python loop.
 - Generates text autoregressively from the trained model.
 
 ### 2) `TorchLinear.py` (PyTorch MLP)
@@ -62,6 +63,8 @@ python -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 pip install numpy datasets torch
+# Install a CuPy build that matches your CUDA version, for example:
+pip install cupy-cuda12x
 ```
 
 ## Run
