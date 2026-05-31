@@ -22,10 +22,10 @@ The code is intentionally short so you can read end-to-end training and sampling
 
 ### 1) `TinyMLP.py` (CuPy character MLP)
 
-- Uses context windows of length 3 (`context_size`).
+- Uses context windows of length 4 (`context_size`).
 - Learns character embeddings, a ReLU hidden layer, and an output projection.
 - Streams 200 TinyStories samples.
-- Trains with manual forward/backward passes in CuPy using `float32` weights.
+- Trains with manual forward/backward passes in CuPy using `float32` weights and mini-batches.
 - Uses vectorized embedding-gradient accumulation instead of a Python loop.
 - Generates text autoregressively from the trained model.
 
@@ -89,6 +89,7 @@ python TorchLinear.py
 
 ## TinyMLP experiment summary (concise)
 
+- Mini-batch update (4/150): **52.4%** at epoch 2000, **4.4s** total training time.
 - Recommended default: **Context = 4, Hidden Size = 150** (48.3%, 24.3s).
 - Faster but weaker: 4/100 (46.8%, 20.3s).
 - Context plateau: increasing context from 4 to 10 gives only +0.3% accuracy (48.3% -> 48.6%).

@@ -16,7 +16,7 @@ vocab_size = len(vocab)
 char_to_idx = {c: i for i, c in enumerate(vocab)}               # encoder
 idx_to_char = {i: c for i, c in enumerate(vocab)}               # decoder
 
-context_size = 3                                                # context window (block size)
+context_size = 4                                                # optimal context window
 data = [char_to_idx[c] for c in text]                           # encode data
 inputs = cp.array([data[i:i+context_size] for i in range(len(data)-context_size)])
 targets = cp.array(data[context_size:])                         # targets are next char
@@ -24,7 +24,8 @@ one_hot_targets = cp.eye(vocab_size, dtype=cp.float32)[targets] # shape (N, voca
 
 # --- Model ---
 cp.random.seed(42)                                              
-emb_dim, hidden_size, lr = 10, 100, 0.5                         # hyperparameters
+emb_dim, hidden_size = 10, 150                                  # optimal network dimensions
+lr, batch_size = 0.5, 1024                                      # training hyperparameters
 N = len(inputs)                                                 # total samples
 
 init_randn = lambda *shape: (cp.random.randn(*shape) * 0.1).astype(cp.float32)
@@ -38,14 +39,19 @@ b2 = cp.zeros((1, vocab_size), dtype=cp.float32)                # output biases
 start = time.time()                                             
 
 for epoch in range(2001):
+    # --- Mini-batching ---
+    idx = cp.random.randint(0, N, size=batch_size)              # random sample indices
+    X_batch = inputs[idx]                                       # slice inputs
+    Y_batch = one_hot_targets[idx]                              # slice targets
+    
     # --- Forward pass ---
-    emb_cat = C[inputs].reshape(N, -1)                          # flat embeddings: (N, block_size * emb_dim)
+    emb_cat = C[X_batch].reshape(batch_size, -1)                # flat embeddings: (B, block_size * emb_dim)
     h       = cp.maximum(0, emb_cat @ W1 + b1)                  # hidden state: ReLU non-linearity
     logits  = h @ W2 + b2                                       # unnormalized log probabilities
     probs   = softmax(logits)                                   # softmax probabilities
     
     # --- Backward pass ---
-    dlogits = (probs - one_hot_targets) / N                     # CE loss gradient 
+    dlogits = (probs - Y_batch) / batch_size                    # CE loss gradient 
     
     dW2     = h.T @ dlogits                                     # grad W2
     db2     = dlogits.sum(axis=0, keepdims=True)                # grad b2
@@ -57,16 +63,18 @@ for epoch in range(2001):
     db1     = dh_pre.sum(axis=0, keepdims=True)                 # grad b1
     
     demb_cat = dh_pre @ W1.T                                    # backprop into embeddings
-    demb     = demb_cat.reshape(N, context_size, emb_dim)       # reshape back to (N, block, emb_dim)
+    demb     = demb_cat.reshape(batch_size, context_size, emb_dim) # reshape back to (B, block, emb_dim)
     dC       = cp.zeros_like(C)                                 
-    cp.add.at(dC, inputs.ravel(), demb.reshape(-1, emb_dim))    # accumulate gradients into C
+    cp.add.at(dC, X_batch.ravel(), demb.reshape(-1, emb_dim))   # accumulate gradients into C
     
     # --- Update ---
     for param, grad in zip([C, W1, b1, W2, b2], [dC, dW1, db1, dW2, db2]): 
         param -= lr * grad                                      # SGD step
         
-    if epoch % 200 == 0:                                        
-        print(f"Epoch {epoch:4d} | Acc: {cp.mean(probs.argmax(1) == targets):.1%}")
+    if epoch % 200 == 0:                                        # full-dataset accuracy check
+        test_h = cp.maximum(0, C[inputs].reshape(N, -1) @ W1 + b1)
+        test_probs = softmax(test_h @ W2 + b2)
+        print(f"Epoch {epoch:4d} | Acc: {cp.mean(test_probs.argmax(1) == targets):.1%}")
 
 print(f"Training time: {time.time() - start:.1f}s")             
 
