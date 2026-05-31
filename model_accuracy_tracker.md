@@ -7,14 +7,13 @@ This file tracks training accuracy for language model experiments run on Google 
 - Platform: Google Colab
 - GPU: T4 GPU
 - Backend: Python 3 (Google Compute Engine, GPU)
-- Resource window shown: 15:03 to 16:34
 - System RAM usage: 8.5 / 12.7 GB
 - GPU RAM usage: 12.2 / 15.0 GB
 - Disk usage: 47.2 / 112.6 GB
 
 ## Run Log
 
-### Model: nameSLP
+### Model: NameSLP.py
 
 | Epoch | Accuracy |
 |---:|---:|
@@ -46,13 +45,7 @@ Generated names sample:
 - iadnno
 - kellane
 
-### Model: tinymlp.py
-
-Runtime usage:
-
-- System RAM usage: 8.5 / 12.7 GB
-- GPU RAM usage: 12.2 / 15.0 GB
-- Disk usage: 47.2 / 112.6 GB
+### Model: TinyMLP.py
 
 | Epoch | Accuracy |
 |---:|---:|
@@ -81,13 +74,7 @@ She said outned. Sker to. Hif even very the box. It. I mesis momors. He day.
 They played, it and said, "Yes, I wast, hure ats a creany five a bind. She saidy
 ```
 
-### Model: tourchmlp.py
-
-Runtime usage:
-
-- System RAM usage: 8.5 / 12.7 GB
-- GPU RAM usage: 12.2 / 15.0 GB
-- Disk usage: 47.2 / 112.6 GB
+### Model: TorchMLP.py
 
 | Epoch | Accuracy |
 |---:|---:|
