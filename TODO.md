@@ -22,6 +22,4 @@
 
 ## Potential Performance Changes
 
-- If `microgpt_lite.py` is added later, try a context size of 256.
-- If `microgpt_lite.py` is added later, try training on 5000 stories.
 - If `microgpt_lite.py` is added later, try Flash Attention with `F.scaled_dot_product_attention`.
