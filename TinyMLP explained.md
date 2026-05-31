@@ -222,6 +222,24 @@ Because it is character-level, the model learns very local patterns. It can prod
 - Epoch checkpoints (mini-batching): 0: 17.0%, 200: 34.9%, 400: 38.2%, 600: 43.0%, 800: 46.3%, 1000: 48.4%, 1200: 48.8%, 1400: 50.7%, 1600: 51.7%, 1800: 50.5%, 2000: 52.3%.
 - Takeaway: in this setup, mini-batching is the better default because it preserves almost all accuracy while reducing training time by about an order of magnitude.
 
+## Embedding dimension (`edim`) experiment summary
+
+| Embedding dimension (`edim`) | Final accuracy (epoch 2000) | Training time |
+|---|---:|---:|
+| 10 | 52.3% | 3.1s |
+| 32 | 55.7% | 3.2s |
+| 64 | 57.3% | 3.4s |
+| 128 | 58.8% | 3.2s |
+| 256 | 59.3% | 3.3s |
+| 512 | 59.9% | 4.2s |
+| 1024 | 60.2% | 6.4s |
+
+### Key findings
+
+- **Sweet spot (128-256):** `edim=256` looks best overall: it improves accuracy over `edim=128` (59.3% vs 58.8%) at only about +0.1s training time (3.3s vs 3.2s).
+- **Diminishing returns (512-1024):** 256 -> 512 costs +0.9s for +0.6% accuracy. 512 -> 1024 costs +2.2s (about +52% time) for +0.3%.
+- **Why time rises:** Larger `edim` makes `emb_cat @ W1` much heavier, so matrix multiply and memory bandwidth become the bottleneck.
+
 ## Short summary
 
 TinyMLP is a compact character MLP that learns to predict the next character from a 4-character window. It uses embeddings, one hidden ReLU layer, and a softmax output, then samples from the learned distribution to generate text.
