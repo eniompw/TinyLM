@@ -1,7 +1,5 @@
-import warnings, time, cupy as cp, numpy as np
+import time, cupy as cp, numpy as np
 from tinystories_dataset import load_tinystories
-
-warnings.filterwarnings('ignore')
 
 def softmax(logits):                                            # converts raw network outputs to probabilities
     e = cp.exp(logits - logits.max(axis=1, keepdims=True))      # shift to prevent float overflow
