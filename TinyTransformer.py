@@ -1,6 +1,6 @@
 import time, torch
 import torch.nn as nn, torch.nn.functional as F
-from tinystories_dataset import load_tinystories
+#from tinystories_dataset import load_tinystories
 
 # Automatically create all tensors on GPU if available, removing manual device boilerplate
 torch.set_default_device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -52,7 +52,7 @@ print(f"Training time: {time.time() - start:.1f}s")
 
 # --- Generate ---
 @torch.no_grad()                                                                        # disable autograd tracking during inference
-def generate(num_chars=200, context=None):                                              # use None to avoid mutable defaults evaluating early
+def generate(num_chars=200, context=list(encoded_text[:context_size])):                 # start with true initial context
     generated_text = [vocab[i] for i in context]                                        # decode initial context to string
     for _ in range(num_chars):
         emb = embed(torch.tensor([context])) + pos_embed(torch.arange(context_size))    # embed current window
