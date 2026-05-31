@@ -212,15 +212,10 @@ Because it is character-level, the model learns very local patterns. It can prod
 
 ## TinyMLP experiment summary
 
-- Notation: **(4/150)** means **context size = 4** characters and **hidden size = 150** neurons.
-- No mini-batching (4/150): **53.0%** at epoch 2000, **48.9s** total training time.
-- Mini-batching (4/150): **52.3%** at epoch 2000, **3.1s** total training time.
-- Final accuracy gap: no mini-batching is +0.7% absolute (53.0% vs 52.3%).
-- Speed gap: mini-batching is about **15.8x faster** (48.9s vs 3.1s).
-- Practical trade-off: mini-batching gives nearly the same final quality for dramatically lower wall-clock time.
-- Epoch checkpoints (no mini-batching): 0: 17.2%, 200: 34.8%, 400: 39.3%, 600: 43.3%, 800: 46.3%, 1000: 48.3%, 1200: 49.4%, 1400: 50.4%, 1600: 51.2%, 1800: 52.1%, 2000: 53.0%.
-- Epoch checkpoints (mini-batching): 0: 17.0%, 200: 34.9%, 400: 38.2%, 600: 43.0%, 800: 46.3%, 1000: 48.4%, 1200: 48.8%, 1400: 50.7%, 1600: 51.7%, 1800: 50.5%, 2000: 52.3%.
-- Takeaway: in this setup, mini-batching is the better default because it preserves almost all accuracy while reducing training time by about an order of magnitude.
+- Baseline config is **ctx=4, h=150**.
+- Full-dataset training reached **53.0%** in **48.9s**.
+- Mini-batch training reached **52.3%** in **3.1s**.
+- Mini-batching is the practical default here: only **0.7%** lower accuracy for about **15.8x** faster training.
 
 ## Embedding dimension (`edim`) experiment summary
 
@@ -239,6 +234,29 @@ Because it is character-level, the model learns very local patterns. It can prod
 - **Sweet spot (128-256):** `edim=256` looks best overall: it improves accuracy over `edim=128` (59.3% vs 58.8%) at only about +0.1s training time (3.3s vs 3.2s).
 - **Diminishing returns (512-1024):** 256 -> 512 costs +0.9s for +0.6% accuracy. 512 -> 1024 costs +2.2s (about +52% time) for +0.3%.
 - **Why time rises:** Larger `edim` makes `emb_cat @ W1` much heavier, so matrix multiply and memory bandwidth become the bottleneck.
+
+## Context size (`ctx`) and hidden size (`h`) experiment summary (pre-mini-batch)
+
+These runs were measured before mini-batching was introduced.
+
+| Configuration | Final accuracy | Train time | Acc/s (efficiency) |
+|---|---:|---:|---:|
+| `ctx=2, h=150` | 41.1% | 23.2s | 1.77 |
+| `ctx=4, h=100` | 46.8% | 20.3s | 2.31 |
+| `ctx=4, h=150` | 48.3% | 24.3s | 1.99 |
+| `ctx=4, h=200` | 47.9% | 27.2s | 1.76 |
+| `ctx=4, h=300` | **49.3%** | 35.3s | 1.40 |
+| `ctx=10, h=150` | 48.6% | 29.2s | 1.66 |
+| `ctx=15, h=200` | 48.2% | 40.2s | 1.20 |
+| **`ctx=4, h=150 + mini-batch`** | **52.4%** | **4.4s** | **11.91** |
+
+### Takeaways
+
+- **Best pre-mini-batch accuracy:** `ctx=4, h=300` at **49.3%**.
+- **Best pre-mini-batch efficiency:** `ctx=4, h=150` is a better speed/quality balance than larger hidden sizes.
+- **Context effect:** `ctx=2` is too small; gains beyond `ctx=4` are limited for this MLP.
+- **Hidden-size effect at `ctx=4`:** improvements are inconsistent past `h=150` and cost more time.
+- **Overall winner:** `ctx=4, h=150 + mini-batch` at **52.4%**, **4.4s**, **11.91 Acc/s** (about 6x more efficient than the best full-dataset run).
 
 ## Short summary
 
