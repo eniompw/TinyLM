@@ -3,6 +3,9 @@ import itertools, warnings
 import torch, torch.nn as nn, torch.nn.functional as F
 warnings.filterwarnings('ignore')
 
+if not torch.cuda.is_available():
+    raise RuntimeError("TorchLinear.py assumes a CUDA GPU (for example, Colab T4). Enable GPU runtime and retry.")
+
 # --- Data ---
 dataset = load_dataset('karpathy/tinystories-gpt4-clean', split='train', streaming=True)
 text    = '\n'.join(s['text'] for s in itertools.islice(dataset, 5000))  # first 5000 stories

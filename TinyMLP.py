@@ -3,6 +3,9 @@ import itertools, warnings, time
 import cupy as cp, numpy as np
 warnings.filterwarnings('ignore')
 
+if cp.cuda.runtime.getDeviceCount() == 0:
+    raise RuntimeError("TinyMLP.py assumes a CUDA GPU (for example, Colab T4). Enable GPU runtime and retry.")
+
 def softmax(x):
     e = cp.exp(x - x.max(axis=1, keepdims=True))                # shift for numerical stability
     return e / e.sum(axis=1, keepdims=True)                     # return probabilities

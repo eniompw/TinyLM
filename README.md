@@ -15,6 +15,7 @@ The code is intentionally short so you can read end-to-end training and sampling
 
 - `TinyMLP.py`: CuPy character MLP with a learned embedding table and one hidden layer.
 - `TinyMLP.ipynb`: notebook version of the CuPy model.
+- `TinyMLP explained.md`: a short walkthrough of `TinyMLP.py`, including data flow, tensor shapes, and manual gradient steps.
 - `TorchLinear.py`: PyTorch character model with learned token/position embeddings and a 2-layer MLP head.
 - `TorchLinear.ipynb`: notebook version for interactive experimentation.
 
@@ -44,6 +45,7 @@ The code is intentionally short so you can read end-to-end training and sampling
 
 - Python 3.10+
 - Internet connection for first dataset download
+- NVIDIA T4 GPU (Google Colab GPU runtime assumed)
 
 Python packages:
 
@@ -55,7 +57,27 @@ Python packages:
 Hardware notes:
 
 - `TinyMLP.py` uses CuPy, so it expects a compatible CUDA setup.
-- `TorchLinear.py` currently calls `.cuda()` directly on tensors/modules, so it requires a CUDA-capable GPU as written.
+- `TorchLinear.py` assumes CUDA is available and will run on GPU.
+
+## Colab (T4) quick start
+
+1. In Colab, open Runtime -> Change runtime type -> Hardware accelerator -> `T4 GPU`.
+2. Install dependencies:
+
+```bash
+pip install --upgrade pip
+pip install datasets torch
+pip install cupy-cuda12x
+```
+
+3. Clone and run:
+
+```bash
+git clone https://github.com/eniompw/TinyLM.git
+cd TinyLM
+python TinyMLP.py
+python TorchLinear.py
+```
 
 ## Setup
 
@@ -86,17 +108,6 @@ python TorchLinear.py
 
 - Source: `karpathy/tinystories-gpt4-clean` via Hugging Face Datasets (streaming mode).
 - Tokenization is character-level, keeping the project simple and educational.
-
-## TinyMLP experiment summary (concise)
-
-- Mini-batch update (4/150): **52.4%** at epoch 2000, **4.4s** total training time.
-- Recommended default: **Context = 4, Hidden Size = 150** (48.3%, 24.3s).
-- Faster but weaker: 4/100 (46.8%, 20.3s).
-- Context plateau: increasing context from 4 to 10 gives only +0.3% accuracy (48.3% -> 48.6%).
-- Efficiency trade-off: that +0.3% costs +20% training time (24.3s -> 29.2s).
-- Context scaling at hidden size 150: 2/150 = 41.1% (23.2s), 4/150 = 48.3% (24.3s), 10/150 = 48.6% (29.2s).
-- Overly large context degrades practicality: 15/200 = 48.2% (40.2s).
-- Takeaway: for this MLP, better gains likely require architectural changes (depth/optimizer/attention), not just larger context or hidden size.
 
 ## Suggested next improvements
 
