@@ -1,6 +1,6 @@
 import time, torch
 import torch.nn.functional as F
-#from tinystories_dataset import load_tinystories
+from tinystories_dataset import load_tinystories
 
 # Automatically create all tensors on GPU if available, removing manual device boilerplate
 torch.set_default_device('cuda' if torch.cuda.is_available() else 'cpu')
