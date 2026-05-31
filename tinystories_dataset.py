@@ -17,12 +17,12 @@ def load_tinystories(num_records=200, context_size=4):
     text = ''.join(s['text'] for s in itertools.islice(dataset, num_records))
 
     # Build vocabulary and tokenize
-    vocab = sorted(set(text))                                       
-    char_to_id = {c: i for i, c in enumerate(vocab)}                
-    encoded = [char_to_id[c] for c in text]                         
+    vocab = sorted(set(text))                                       # ordered list of unique characters
+    char_to_id = {c: i for i, c in enumerate(vocab)}                # dictionary mapping char to integer id
+    encoded = [char_to_id[c] for c in text]                         # map entire text to integer sequence
 
     # Create sliding windows for inputs and targets
-    inputs = cp.array([encoded[i:i+context_size] for i in range(len(encoded)-context_size)])
-    targets = cp.array(encoded[context_size:])                                                
+    inputs = cp.array([encoded[i:i+context_size] for i in range(len(encoded)-context_size)]) # sliding windows
+    targets = cp.array(encoded[context_size:])                                                # next char to predict
 
     return inputs, targets, vocab, encoded

@@ -1,7 +1,7 @@
 import urllib.request
 import numpy as np
 
-def load_karpathy_names(context_size=4, limit=10000):
+def load_names(context_size=6, limit=10000):
     url = "https://raw.githubusercontent.com/karpathy/makemore/master/names.txt"
     text = urllib.request.urlopen(url).read().decode('utf-8')   # fetch names dataset directly from github
     text = text[:limit]                                         # slice to prevent memory overflow in pure numpy
