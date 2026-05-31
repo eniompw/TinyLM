@@ -6,16 +6,16 @@ def softmax(x):
     return exp_x / exp_x.sum(axis=1, keepdims=True)             # normalize so all probabilities sum to 1
 
 # --- Dataset ---
-context_size = 4
+context_size = 6                                                # increased to 6 for better SLP accuracy
 X, y, vocab = load_names(context_size=context_size)             # load dataset features, targets, and vocabulary
 vocab_size = len(vocab)                                         # total count of unique characters
 y_one_hot = np.eye(vocab_size)[y]                               # one-hot encode labels
 
 # --- Model ---
 np.random.seed(42)
-W = np.random.randn(context_size * vocab_size, vocab_size)*0.1  # weights: (4 * vocab_size) inputs → vocab_size classes
+W = np.random.randn(context_size * vocab_size, vocab_size)*0.1  # weights: (6 * vocab_size) inputs → vocab_size classes
 b = np.zeros((1, vocab_size))                                   # biases for each class
-learning_rate = 2.0                                             # step size for gradient descent
+learning_rate = 5.0                                             # step size for gradient descent
 
 # --- Train ---
 for epoch in range(1001):
@@ -23,12 +23,13 @@ for epoch in range(1001):
     dlogits = (probs - y_one_hot) / len(X)                      # cross-entropy + softmax gradient
     W -= learning_rate * X.T @ dlogits                          # update weights
     b -= learning_rate * dlogits.sum(0, keepdims=True)          # update biases
+    
     if epoch % 200 == 0:
         acc = np.mean(probs.argmax(1) == y)                     # calculate exact match accuracy
         print(f"Epoch {epoch:4d} | Acc: {acc:.1%}")
 
 # --- Generate ---
-ctx = X[0].reshape(context_size, vocab_size).argmax(1).tolist() # extract first 4 chars from X[0] to use as seed
+ctx = X[0].reshape(context_size, vocab_size).argmax(1).tolist() # extract first 6 chars from X[0] to use as seed
 out = [vocab[i] for i in ctx]                                   # initialize output string list
 
 for _ in range(100):
