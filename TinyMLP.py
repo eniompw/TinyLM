@@ -54,8 +54,9 @@ for epoch in range(2001):
         p -= lr * g                                             # standard SGD parameter update
 
     if epoch % 200 == 0:
-        acc = cp.mean((cp.maximum(0, C[inputs].reshape(N, -1) @ W1) @ W2).argmax(1) == targets) # mathematically identical to softmax argmax, but faster
-        print(f"Epoch {epoch:4d} | Acc: {acc:.1%}")
+        logits = cp.maximum(0, C[inputs].reshape(N, -1) @ W1) @ W2  # full dataset forward pass
+        preds = logits.argmax(1)                                    # mathematical shortcut: argmax directly on logits
+        print(f"Epoch {epoch:4d} | Acc: {cp.mean(preds == targets):.1%}")
 
 print(f"Training time: {time.time() - start:.1f}s")
 
