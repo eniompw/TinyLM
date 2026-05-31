@@ -2,6 +2,21 @@
 
 This file walks through [TinyMLP.py](TinyMLP.py) from top to bottom. The script is a small character-level language model built with CuPy, trained on TinyStories text, and used to generate new text one character at a time.
 
+## Contents
+
+1. [What the script does](#what-the-script-does)
+2. [Imports and setup](#imports-and-setup)
+3. [Data preparation](#data-preparation)
+4. [Model architecture](#model-architecture)
+5. [Training loop](#training-loop)
+6. [Generation](#generation)
+7. [TinyMLP experiment summary](#tinymlp-experiment-summary)
+8. [Embedding dimension experiment summary](#embedding-dimension-edim-experiment-summary)
+9. [Context size and hidden size experiment summary](#context-size-ctx-and-hidden-size-h-experiment-summary-pre-mini-batch)
+10. [Why this model is useful](#why-this-model-is-useful)
+11. [Things to notice](#things-to-notice)
+12. [Short summary](#short-summary)
+
 ## What the script does
 
 At a high level, the script:
@@ -33,6 +48,7 @@ From that text, the script builds a character vocabulary:
 
 ```python
 vocab = sorted(set(text))
+vocab_size = len(vocab)
 char_to_idx = {c: i for i, c in enumerate(vocab)}
 idx_to_char = {i: c for i, c in enumerate(vocab)}
 ```
@@ -47,14 +63,22 @@ The model uses a context size of 4:
 context_size = 4
 ```
 
-For every position in the text, the input is the previous 4 characters and the target is the next character. So the model learns the question: given 4 characters, what character comes next?
-
 The code then:
 
 1. Encodes the whole text as integer IDs.
 2. Builds `inputs` as sliding windows of length 4.
 3. Builds `targets` as the next character after each window.
-4. Converts targets into one-hot vectors for cross-entropy training.
+4. Uses the target IDs directly for cross-entropy training.
+
+For every position in the text, the input is the previous 4 characters and the target is the next character. The script encodes the text as integer IDs and then builds:
+
+```python
+data = [char_to_idx[c] for c in text]
+inputs = cp.array([data[i:i+context_size] for i in range(len(data)-context_size)])
+targets = cp.array(data[context_size:])
+```
+
+So the model learns the question: given 4 characters, what character comes next?
 
 ## Model architecture
 
@@ -63,25 +87,23 @@ The model is a small feed-forward network with learned character embeddings.
 ### Embedding table
 
 ```python
-C = init_randn(vocab_size, emb_dim)
+C = r(vocab_size, emb_dim)
 ```
 
-Each character ID maps to a learned vector of size `emb_dim = 10`. For a 4-character context, the 4 embedding vectors are concatenated into one long feature vector.
+Each character ID maps to a learned vector of size `emb_dim = 256`. For a 4-character context, the 4 embedding vectors are concatenated into one long feature vector.
 
 ### Hidden layer
 
 ```python
-W1 = init_randn(context_size * emb_dim, hidden_size)
-b1 = cp.zeros((1, hidden_size), dtype=cp.float32)
+W1 = r(context_size * emb_dim, hidden_size)
 ```
 
-The concatenated embeddings are projected into a hidden layer of size `hidden_size = 150`, then passed through ReLU.
+The concatenated embeddings are projected into a hidden layer of size `hidden_size = 150`, then passed through ReLU. There are no bias terms in this version of the model.
 
 ### Output layer
 
 ```python
-W2 = init_randn(hidden_size, vocab_size)
-b2 = cp.zeros((1, vocab_size), dtype=cp.float32)
+W2 = r(hidden_size, vocab_size)
 ```
 
 The hidden activations are mapped to a logit for every character in the vocabulary. After softmax, those logits become probabilities for the next character.
@@ -96,37 +118,33 @@ Each iteration samples random training positions:
 
 ```python
 idx = cp.random.randint(0, N, size=batch_size)
-X_batch = inputs[idx]
-Y_batch = one_hot_targets[idx]
+X, Y = inputs[idx], targets[idx]
 ```
 
 This is stochastic gradient descent with random mini-batches.
-
-Summary note: no mini-batching reached 53.0% at epoch 2000 in 48.9s, while mini-batching reached 52.3% in 3.1s. That is only a 0.7% absolute accuracy gap, but mini-batching is about 15.8x faster, so it offers nearly the same quality for dramatically lower wall-clock time.
 
 If you are converting a full-dataset loop to mini-batching, the key training-loop edit is:
 
 ```python
 for epoch in range(2001):
 	# --- Mini-batching ---
-	idx = cp.random.randint(0, N, size=batch_size)              # random sample indices
-	X_batch = inputs[idx]                                       # slice inputs
-	Y_batch = one_hot_targets[idx]                              # slice targets
+	idx = cp.random.randint(0, N, size=batch_size)  # random sample indices
+	X_batch = inputs[idx]                           # slice inputs
+	Y_batch = targets[idx]                          # slice targets
 ```
 
 Then, inside that loop:
 
 1. Replace `inputs` with `X_batch`.
-2. Replace `one_hot_targets` with `Y_batch`.
-3. Replace `N` with `batch_size` for batch-shaped operations (for example reshape sizes and gradient normalization).
+2. Replace `targets` with `Y_batch`.
+3. Replace `N` with `batch_size` for batch-shaped operations, such as reshape sizes and gradient normalization.
 
 ### Forward pass
 
 ```python
-emb_cat = C[X_batch].reshape(batch_size, -1)
-h = cp.maximum(0, emb_cat @ W1 + b1)
-logits = h @ W2 + b2
-probs = softmax(logits)
+emb = C[X].reshape(batch_size, -1)
+h = cp.maximum(0, emb @ W1)
+probs = softmax(h @ W2)
 ```
 
 What happens here:
@@ -139,18 +157,20 @@ What happens here:
 
 ### Backward pass
 
-The gradient for cross-entropy with softmax is simplified as:
+The gradient for cross-entropy with softmax is simplified by directly subtracting 1 at the target index:
 
 ```python
-dlogits = (probs - Y_batch) / batch_size
+dlogits = probs.copy()
+dlogits[cp.arange(batch_size), Y] -= 1
+dlogits /= batch_size
 ```
 
 From there, gradients are computed for each parameter by the chain rule:
 
-1. `W2` and `b2` from the output layer.
+1. `W2` from the output layer.
 2. Backpropagation into the hidden layer.
 3. ReLU mask to zero out gradients where activations were negative.
-4. `W1` and `b1` from the hidden layer.
+4. `W1` from the hidden layer.
 5. Gradients for the embedding table `C`.
 
 ### Embedding gradient accumulation
@@ -158,7 +178,7 @@ From there, gradients are computed for each parameter by the chain rule:
 The embedding table is updated with:
 
 ```python
-cp.add.at(dC, X_batch.ravel(), demb.reshape(-1, emb_dim))
+cp.add.at(dC, X.ravel(), (dh @ W1.T).reshape(-1, emb_dim))
 ```
 
 This matters because the same character can appear multiple times in a batch. `add.at` accumulates repeated gradient contributions correctly.
@@ -168,7 +188,7 @@ This matters because the same character can appear multiple times in a batch. `a
 Each parameter is updated with simple SGD:
 
 ```python
-param -= lr * grad
+p -= lr * g
 ```
 
 The learning rate is `0.5`, which is fairly large, but the network is tiny and the experiment is deliberately lightweight.
@@ -189,26 +209,6 @@ It starts from the first 4 characters of the training data as a seed context, th
 4. Slides the context window forward by one character.
 
 This is autoregressive generation: each new character is predicted from the previously generated characters.
-
-## Why this model is useful
-
-The script is intentionally minimal, but it demonstrates several core ideas:
-
-1. Character-level language modeling.
-2. Learned embeddings.
-3. A manual forward/backward pass.
-4. Mini-batch SGD.
-5. Sampling from a probabilistic model.
-
-It is a good reference if you want to understand how a language model works without the complexity of a Transformer.
-
-## Things to notice
-
-The implementation is fully manual. There is no deep learning framework autograd involved, so the gradients are explicit and easy to inspect.
-
-The code assumes a CuPy-compatible GPU setup. On a machine without CUDA, it will not run as written.
-
-Because it is character-level, the model learns very local patterns. It can produce plausible-looking text fragments, but it does not have the capacity of larger sequence models.
 
 ## TinyMLP experiment summary
 
@@ -257,6 +257,26 @@ These runs were measured before mini-batching was introduced.
 - **Context effect:** `ctx=2` is too small; gains beyond `ctx=4` are limited for this MLP.
 - **Hidden-size effect at `ctx=4`:** improvements are inconsistent past `h=150` and cost more time.
 - **Overall winner:** `ctx=4, h=150 + mini-batch` at **52.4%**, **4.4s**, **11.91 Acc/s** (about 6x more efficient than the best full-dataset run).
+
+## Why this model is useful
+
+The script is intentionally minimal, but it demonstrates several core ideas:
+
+1. Character-level language modeling.
+2. Learned embeddings.
+3. A manual forward/backward pass.
+4. Mini-batch SGD.
+5. Sampling from a probabilistic model.
+
+It is a good reference if you want to understand how a language model works without the complexity of a Transformer.
+
+## Things to notice
+
+The implementation is fully manual. There is no deep learning framework autograd involved, so the gradients are explicit and easy to inspect.
+
+The code assumes a CuPy-compatible GPU setup. On a machine without CUDA, it will not run as written.
+
+Because it is character-level, the model learns very local patterns. It can produce plausible-looking text fragments, but it does not have the capacity of larger sequence models.
 
 ## Short summary
 
