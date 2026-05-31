@@ -23,7 +23,7 @@ The code is intentionally short so you can read end-to-end training and sampling
 
 ## Repository contents
 
-- `nameSLP.py`: NumPy single-layer perceptron trained on character windows from the names dataset.
+- `NameSLP.py`: NumPy single-layer perceptron trained on character windows from the names dataset.
 - `names_dataset.py`: Karpathy names data loader with character encoding and one-hot context features.
 - `TinyMLP.py`: CuPy character MLP with a learned embedding table and one hidden layer.
 - `tinystories_dataset.py`: shared TinyStories data loader and character-level preprocessing utility.
@@ -33,7 +33,7 @@ The code is intentionally short so you can read end-to-end training and sampling
 
 ## Models
 
-### 1) `nameSLP.py` (NumPy SLP baseline)
+### 1) `NameSLP.py` (NumPy SLP baseline)
 
 - Uses context windows of length 6 (`context_size`).
 - Loads names data via `load_names(...)` from `names_dataset.py`.
@@ -88,7 +88,7 @@ Training accuracy snapshots and generated sample comparisons are tracked in [mod
 
 - Source: `names.txt` from `karpathy/makemore` (downloaded directly from GitHub).
 - Source: `karpathy/tinystories-gpt4-clean` via Hugging Face Datasets (streaming mode).
-- Helper loaders: `names_dataset.py` (for `nameSLP.py`) and `tinystories_dataset.py` (for `TinyMLP.py` and `TorchMLP.py`).
+- Helper loaders: `names_dataset.py` (for `NameSLP.py`) and `tinystories_dataset.py` (for `TinyMLP.py` and `TorchMLP.py`).
 - Tokenization is character-level, keeping the project simple and educational.
 
 ## Suggested next improvements
