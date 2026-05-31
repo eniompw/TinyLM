@@ -4,12 +4,6 @@ import itertools
 def load_tinystories(num_stories=200, context_size=4):
     """
     Fetches the TinyStories dataset and prepares it for a character-level language model.
-    
-    Returns:
-        inputs (list): Sliding window context arrays of shape (N, context_size)
-        targets (list): Target next-character arrays of shape (N,)
-        vocab (list): The list of unique characters (vocabulary)
-        encoded (list): The full encoded text as a list of integer IDs
     """
     # Fetch data
     dataset = load_dataset('karpathy/tinystories-gpt4-clean', split='train', streaming=True)
@@ -19,6 +13,10 @@ def load_tinystories(num_stories=200, context_size=4):
     vocab = sorted(set(text))                                       # ordered list of unique characters
     char_to_id = {c: i for i, c in enumerate(vocab)}                # dictionary mapping char to integer id
     encoded = [char_to_id[c] for c in text]                         # map entire text to integer sequence
+
+    # If context_size=1, skip building windows to save RAM (training loop handles slicing).
+    if context_size == 1:
+        return [], [], vocab, encoded
 
     # Create sliding windows for inputs and targets using standard Python lists
     inputs = [encoded[i:i+context_size] for i in range(len(encoded)-context_size)] # sliding windows
