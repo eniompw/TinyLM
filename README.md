@@ -2,27 +2,30 @@
 
 TinyLM is a small character-level language modeling playground.
 
+Conceptually, it sits about halfway between [MLP-Digits-Classifier](https://github.com/eniompw/MLP-Digits-Classifier) and [microgpt](https://github.com/eniompw/microgpt).
+
 It contains two compact implementations that train on TinyStories text and generate characters autoregressively:
 
-- a NumPy single-layer bigram model
+- a CuPy character MLP with learned embeddings
 - a PyTorch MLP model with token + positional embeddings
 
 The code is intentionally short so you can read end-to-end training and sampling in one sitting.
 
 ## Repository contents
 
-- `TinySLP.py`: NumPy baseline (single linear layer over one-hot inputs).
+- `TinyMLP.py`: CuPy character MLP with a learned embedding table and one hidden layer.
 - `TorchLinear.py`: PyTorch character model with learned token/position embeddings and a 2-layer MLP head.
 - `TorchLinear.ipynb`: notebook version for interactive experimentation.
 
 ## Models
 
-### 1) `TinySLP.py` (NumPy bigram model)
+### 1) `TinyMLP.py` (CuPy character MLP)
 
-- Builds one-hot bigram pairs: current character -> next character.
-- Trains a linear classifier with softmax and gradient descent.
-- Streams 100 TinyStories samples.
-- Runs on CPU.
+- Uses context windows of length 3 (`context_size`).
+- Learns character embeddings, a tanh hidden layer, and an output projection.
+- Streams 200 TinyStories samples.
+- Trains with manual forward/backward passes in CuPy.
+- Generates text autoregressively from the trained model.
 
 ### 2) `TorchLinear.py` (PyTorch MLP)
 
@@ -43,12 +46,13 @@ The code is intentionally short so you can read end-to-end training and sampling
 Python packages:
 
 - `numpy`
+- `cupy`
 - `datasets`
 - `torch`
 
 Hardware notes:
 
-- `TinySLP.py` is CPU-friendly.
+- `TinyMLP.py` uses CuPy, so it expects a compatible CUDA setup.
 - `TorchLinear.py` currently calls `.cuda()` directly, so it requires a CUDA-capable GPU as written.
 
 ## Setup
@@ -62,10 +66,10 @@ pip install numpy datasets torch
 
 ## Run
 
-Run the NumPy baseline:
+Run the CuPy MLP:
 
 ```bash
-python TinySLP.py
+python TinyMLP.py
 ```
 
 Run the PyTorch model:
@@ -81,6 +85,7 @@ python TorchLinear.py
 
 ## Suggested next improvements
 
+- Add CPU/NumPy fallback to `TinyMLP.py` for non-CUDA environments.
 - Add device fallback (`cuda`/`cpu`) to `TorchLinear.py`.
 - Expose hyperparameters through command-line arguments.
 - Add checkpoint save/load support.
