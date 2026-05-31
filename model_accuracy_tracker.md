@@ -21,17 +21,17 @@ This file tracks training accuracy for language model experiments run on Google 
 | 600 | 38.6% | 52.3% | 59.1% |
 | 800 | 38.9% | 55.0% | 59.9% |
 | 1000 | 39.1% | 56.4% | 60.8% |
-| 1200 | - | 56.7% | 61.4% |
-| 1400 | - | 58.2% | 60.8% |
-| 1600 | - | 58.3% | 61.8% |
-| 1800 | - | 59.2% | 61.1% |
-| 2000 | - | 59.4% | 62.4% |
+| 1200 | 39.2% | 56.7% | 61.4% |
+| 1400 | 39.4% | 58.2% | 60.8% |
+| 1600 | 39.5% | 58.3% | 61.8% |
+| 1800 | 39.5% | 59.2% | 61.1% |
+| 2000 | 39.6% | 59.4% | 62.4% |
 
 ## Summary Comparison
 
 | Model | Best Accuracy | Epoch | Training Time |
 |---|---:|---:|---:|
-| NameSLP.py | 39.1% | 1000 | - |
+| NameSLP.py | 39.6% | 2000 | 35.1s |
 | TinyMLP.py | 59.4% | 2000 | 3.9s |
 | TorchMLP.py | 62.4% | 2000 | 3.6s |
 
@@ -40,21 +40,21 @@ This file tracks training accuracy for language model experiments run on Google 
 ### NameSLP.py
 
 - emma
-- oroi
-- atilah
-- ria
-- aidady
-- mich
-- olyian
-- mirys
-- phnaryia
-- espe
-- keyla
-- azbellen
-- carannse
-- brtelyn
-- iadnno
-- kellane
+- osola
+- riganna
+- ahala
+- horme
+- rayly
+- etannoye
+- toraeyn
+- alose
+- gettel
+- yandilon
+- ceamira
+- anleiph
+- kafrin
+- melia
+- j
 
 ### TinyMLP.py
 
