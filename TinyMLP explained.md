@@ -210,8 +210,9 @@ The code assumes a CuPy-compatible GPU setup. On a machine without CUDA, it will
 
 Because it is character-level, the model learns very local patterns. It can produce plausible-looking text fragments, but it does not have the capacity of larger sequence models.
 
-## TinyMLP experiment summary (concise)
+## TinyMLP experiment summary
 
+- Notation: **(4/150)** means **context size = 4** characters and **hidden size = 150** neurons.
 - No mini-batching (4/150): **53.0%** at epoch 2000, **48.9s** total training time.
 - Mini-batching (4/150): **52.3%** at epoch 2000, **3.1s** total training time.
 - Final accuracy gap: no mini-batching is +0.7% absolute (53.0% vs 52.3%).
