@@ -46,16 +46,16 @@ Compared with `TorchMLP.py`, `TinyTransformer.py` makes these structural changes
 ### Token + position embeddings
 
 ```python
-embed = nn.Embedding(len(vocab), 256)
+tok_embed = nn.Embedding(len(vocab), 256)
 pos_embed = nn.Embedding(8, 256)
 ```
 
-- `embed` maps each character ID to a 256-dim vector.
+- `tok_embed` maps each character ID to a 256-dim vector.
 - `pos_embed` gives each position in the 8-token window its own learned vector.
 - The input to the transformer is their sum:
 
 ```python
-emb = embed(batch_inputs) + pos_embed(torch.arange(8))
+input_embed = tok_embed(batch_inputs) + pos_embed(torch.arange(8))
 ```
 
 This lets the model know both what token it sees and where it appears in the context.
@@ -86,7 +86,7 @@ transformer = torch.compile(
 After the encoder, only the last time step is used for next-token prediction:
 
 ```python
-logits = model(transformer(emb)[:, -1, :])
+logits = model(transformer(input_embed)[:, -1, :])
 ```
 
 This mirrors the autoregressive setup: use the whole context, predict the next character.
@@ -188,7 +188,7 @@ Lower second beta than default can make the optimizer react faster to recent gra
 
 ```python
 probabilities = torch.softmax(
-    model(transformer(emb)[:, -1, :]) / 0.7,
+    model(transformer(input_embed)[:, -1, :]) / 0.7,
     1
 )
 ```
