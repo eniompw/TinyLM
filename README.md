@@ -2,7 +2,9 @@
 
 TinyLM is a small character-level language modeling playground.
 
-Conceptually, it sits about halfway between [MLP-Digits-Classifier](https://github.com/eniompw/MLP-Digits-Classifier) and [MicroGPT](https://github.com/eniompw/MicroGPT).
+> Follows on from [MLP-Digits-Classifier](https://github.com/eniompw/MLP-Digits-Classifier), extending multi-class neural networks from image classification to character-level language modeling.
+>
+> This series continues with [MicroGPT](https://github.com/eniompw/MicroGPT), where the character-level model is scaled up to a decoder-only transformer.
 
 It contains four compact implementations that train character-level models and generate text autoregressively:
 
