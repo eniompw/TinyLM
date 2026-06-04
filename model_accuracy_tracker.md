@@ -13,9 +13,9 @@ This file tracks training accuracy for language model experiments run on Google 
 
 ## Accuracy Comparison
 
-**Key:** TT = TinyTransformer.py, TTC = TinyTransformerClass.py
+**Key:** TT = TinyTransformer.py, TTC = TinyTransformerClass.py, µGPT = microgpt_lite.py
 
-| Epoch | NameSLP.py | TinyMLP.py | TorchMLP.py | TT | TTC | microgpt_lite.py | LlamaLite |
+| Epoch | NameSLP.py | TinyMLP.py | TorchMLP.py | TT | TTC | µGPT | LlamaLite |
 |---:|---:|---:|---:|---:|---:|---:|---:|
 | 0 | 3.5% | 4.7% | 21.4% | 19.2% | 19.3% | 1.7% | 19.6% |
 | 200 | 37.1% | 44.8% | 54.3% | 54.6% | 53.8% | 53.6% | 47.3% |
