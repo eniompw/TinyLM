@@ -38,7 +38,7 @@ This file tracks training accuracy for language model experiments run on Google 
 | TinyTransformer.py | 68.5% | 2000 | 29.2s |
 | TinyTransformer.py (`context_size=8`, latest run) | 67.4% | 1600 | 25.4s |
 | TinyTransformer.py (`context_size=64`) | 68.5% | 1800 | 197.5s |
-| TinyTransformer.py (new run) | 68.0% | 2000 | 42.5s |
+| TinyTransformerClass.py | 68.0% | 2000 | 42.5s |
 | microgpt_lite.py | 79.4% | 3500 | 202.0s |
 
 ## Transformer Experiment Notes
@@ -72,7 +72,7 @@ Quick comparison:
 - Best accuracy: `67.4%` (`context_size=8`) vs `68.5%` (`context_size=64`) -> `+1.1` points.
 - Training time: `25.4s` (`context_size=8`) vs `197.5s` (`context_size=64`) -> about `7.8x` slower at `context_size=64`.
 
-### TinyTransformer New Run (42.5s)
+### TinyTransformerClass.py (42.5s)
 
 | Step | Loss | Accuracy |
 |---:|---:|---:|
@@ -134,7 +134,7 @@ Once there was a little bird would help his friends to play unnot started to fin
 The asked his mom park outside in the sun bag beak tree and got of the pick she could find the bird sa
 ```
 
-### TinyTransformer.py (new run)
+### TinyTransformerClass.py
 
 ```text
 Once there was a little bird would help them to measure. They had so happy to the park with her bed the cat on, and he looked at the head to help. They are red back well. One day, a big blue.
