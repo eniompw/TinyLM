@@ -18,16 +18,16 @@ This file tracks training accuracy for language model experiments run on Google 
 | Epoch | NameSLP.py | TinyMLP.py | TorchMLP.py | TT | TTC | µGPT | LlamaLite |
 |---:|---:|---:|---:|---:|---:|---:|---:|
 | 0 | 3.5% | 4.7% | 21.4% | 19.2% | 19.3% | 1.7% | 19.6% |
-| 200 | 37.1% | 44.8% | 54.3% | 54.6% | 53.8% | 53.6% | 47.3% |
-| 400 | 38.2% | 48.9% | 58.0% | 59.5% | 59.0% | 65.2% | 53.7% |
-| 600 | 38.6% | 52.3% | 59.1% | 61.0% | 61.3% | 68.6% | 57.1% |
-| 800 | 38.9% | 55.0% | 59.9% | 63.7% | 63.4% | 71.4% | 58.3% |
-| 1000 | 39.1% | 56.4% | 60.8% | 66.3% | 65.4% | 71.9% | 60.9% |
-| 1200 | 39.2% | 56.7% | 61.4% | 66.0% | 65.5% | 73.3% | 62.6% |
-| 1400 | 39.4% | 58.2% | 60.8% | 67.4% | 66.5% | 74.6% | 63.0% |
-| 1600 | 39.5% | 58.3% | 61.8% | 67.4% | 66.6% | 76.0% | 64.1% |
-| 1800 | 39.5% | 59.2% | 61.1% | 67.9% | 67.3% | 75.9% | 66.4% |
-| 2000 | 39.6% | 59.4% | 62.4% | 68.4% | 68.0% | 77.0% | 65.6% |
+| 200 | 37.1% | 44.8% | 54.3% | 54.6% | 54.7% | 53.6% | 47.3% |
+| 400 | 38.2% | 48.9% | 58.0% | 59.5% | 58.7% | 65.2% | 53.7% |
+| 600 | 38.6% | 52.3% | 59.1% | 61.0% | 60.6% | 68.6% | 57.1% |
+| 800 | 38.9% | 55.0% | 59.9% | 63.7% | 63.9% | 71.4% | 58.3% |
+| 1000 | 39.1% | 56.4% | 60.8% | 66.3% | 65.1% | 71.9% | 60.9% |
+| 1200 | 39.2% | 56.7% | 61.4% | 66.0% | 64.9% | 73.3% | 62.6% |
+| 1400 | 39.4% | 58.2% | 60.8% | 67.4% | 66.8% | 74.6% | 63.0% |
+| 1600 | 39.5% | 58.3% | 61.8% | 67.4% | 66.8% | 76.0% | 64.1% |
+| 1800 | 39.5% | 59.2% | 61.1% | 67.9% | 67.8% | 75.9% | 66.4% |
+| 2000 | 39.6% | 59.4% | 62.4% | 68.4% | 68.1% | 77.0% | 65.6% |
 | 3500 | - | - | - | - | - | 79.4% | - |
 
 ## Summary Comparison
@@ -40,7 +40,7 @@ This file tracks training accuracy for language model experiments run on Google 
 | TinyTransformer.py | 68.4% | 2000 | 20.9s |
 | TinyTransformer.py (`context_size=8`, prev run) | 67.4% | 1600 | 25.4s |
 | TinyTransformer.py (`context_size=64`) | 68.5% | 1800 | 197.5s |
-| TinyTransformerClass.py | 68.0% | 2000 | 42.5s |
+| TinyTransformerClass.py (1,614,400 params) | 68.1% | 2000 | 19.3s |
 | microgpt_lite.py | 79.4% | 3500 | 202.0s |
 | LlamaLite (`context_size=32`, 1.59M params) | 66.4% | 1800 | 62.7s |
 
@@ -121,7 +121,7 @@ Once there. She wise her bird was full and went out the thought it was too take 
 ### TinyTransformerClass.py
 
 ```text
-Once there was a little bird would help them to measure. They had so happy to the park with her bed the cat on, and he looked at the head to help. They are red back well. One day, a big blue.
+Once there. She was playing nap. They laughed a more a little girl named Fluffy was a great time her talked away. Tom looked a bunny he did not like to get reache. They loved to play with the balls
 ```
 
 ### microgpt_lite.py
