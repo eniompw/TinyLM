@@ -2,7 +2,9 @@ import time, torch
 import torch.nn as nn, torch.nn.functional as F
 from tinystories_dataset import load_tinystories
 
-torch.set_default_device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+torch.set_default_device(device)
+print(f"device: {device}" + (f" | {torch.cuda.get_device_name(0)}" if device.type == 'cuda' else ''))
 
 # --- Data & Tokenization ---
 context_size = 256
@@ -47,7 +49,6 @@ class LlamaLite(nn.Module):
         self.norm = RMSNorm()                                                                     # final layer norm
         for p in self.parameters():
             if p.dim() > 1: nn.init.normal_(p, mean=0.0, std=0.02)                                # init weights matching tiny scale
-        
         t, f = torch.arange(context_size).float(), 1.0 / (10000.0 ** (torch.arange(0, n_embd//n_head, 2).float() / (n_embd//n_head)))
         self.register_buffer('rope_cos', torch.outer(t, f).cos()), self.register_buffer('rope_sin', torch.outer(t, f).sin()) # RoPE tables
 
@@ -58,13 +59,15 @@ class LlamaLite(nn.Module):
 
 # --- Setup & Train ---
 model = torch.compile(LlamaLite(len(idx_to_char)))                                                # fuse GPU kernels for ~2x speedup
+print(f"params: {sum(p.numel() for p in model.parameters()):,}")
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, betas=(0.9, 0.95), fused=True)         # native param extraction, fused AdamW
 scheduler, scaler, start = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 2000, 1e-4), torch.amp.GradScaler('cuda'), time.time()
+print("model ready")
 
 for step in range(2001):
     batch_idx = torch.randint(0, len(input_ids), (1024,))                                         # random batch indices (batch_size=1024)
     batch_x, batch_y = input_ids[batch_idx], target_ids[batch_idx]                                # fetch random mini-batch
-    
+
     with torch.autocast('cuda', dtype=torch.float16):                                             # float16 mixed precision for speed
         loss = F.cross_entropy(model(batch_x)[:, -1, :], batch_y)                                 # take last token logits and compute loss
 
@@ -76,7 +79,7 @@ for step in range(2001):
         with torch.no_grad(), torch.autocast('cuda', dtype=torch.float16):                        # disable tracking during evaluation
             eval_idx = torch.randint(0, len(input_ids), (4096,))                                  # subset evaluation to prevent GPU OOM
             pred_ids = model(input_ids[eval_idx])[:, -1, :].argmax(1)                             # dataset subset forward & argmax
-            print(f"Step {step:4d} | Loss: {loss:.4f} | Acc: {(pred_ids == target_ids[eval_idx]).float().mean():.1%}")
+            print(f"Step {step:4d} | Loss: {loss:.4f} | Acc: {(pred_ids == target_ids[eval_idx]).float().mean():.1%} | {time.time()-start:.1f}s")
 
 print(f"Training time: {time.time() - start:.1f}s")
 
