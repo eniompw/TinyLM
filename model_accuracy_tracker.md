@@ -7,9 +7,9 @@ This file tracks training accuracy for language model experiments run on Google 
 - Platform: Google Colab
 - GPU: T4 GPU
 - Backend: Python 3 (Google Compute Engine, GPU)
-- System RAM usage: 8.5 / 12.7 GB
-- GPU RAM usage: 12.2 / 15.0 GB
-- Disk usage: 47.2 / 112.6 GB
+- System RAM: 12.7 GB
+- GPU RAM: 15.0 GB
+- Disk: 112.6 GB
 
 ## Accuracy Comparison
 
