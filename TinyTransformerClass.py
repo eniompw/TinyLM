@@ -7,8 +7,8 @@ torch.set_default_device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # --- Hyperparameters ---
 context_size, embed_dim          = 8, 256                                                         # context window size; embedding dimension (d_model)
-n_heads, ffn_dim, n_layers       = 4, 1024, 2                                                     # attention heads; FFN hidden dim; transformer layers
-batch_size, lr, n_steps          = 1024, 1e-3, 2001                                               # samples per step; learning rate; total training steps
+n_heads, ffn_dim, n_layers       = 4, 1024, 4                                                     # attention heads; FFN hidden dim; transformer layers
+batch_size, lr, n_steps          = 1024, 1e-3, 3500                                               # samples per step; learning rate; total training steps
 
 # --- Data & Tokenization ---
 input_ids, target_ids, idx_to_char, token_ids = load_tinystories(num_stories=1000, context_size=context_size) # previous chars to predict next
