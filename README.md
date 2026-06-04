@@ -22,7 +22,7 @@ The code is intentionally short so you can read end-to-end training and sampling
 - [Repository contents](#repository-contents)
 - [Models](#models)
 - [Requirements](#requirements)
-- [Accuracy tracker](#accuracy-tracker)
+- [Benchmarks](#benchmarks)
 - [Dataset](#dataset)
 - [Suggested next improvements](#suggested-next-improvements)
 
@@ -125,9 +125,9 @@ Hardware notes:
 - `TinyTransformerClass.py` shares the same hardware requirements as `TinyTransformer.py`.
 - `TinyLlama.py` shares the same hardware requirements as `TinyTransformerClass.py`.
 
-## Accuracy tracker
+## Benchmarks
 
-Training accuracy snapshots and generated sample comparisons are tracked in [model_accuracy_tracker.md](model_accuracy_tracker.md).
+Training accuracy snapshots and generated sample comparisons are tracked in [benchmarks.md](benchmarks.md).
 
 ## Dataset
 
