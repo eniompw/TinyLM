@@ -26,12 +26,12 @@ class TinyTransformer(nn.Module):
         return self.linear(self.transformer(x)[:, -1, :])                                        # transformer + project last token to logits
 
 model = TinyTransformer(len(idx_to_char))
+print(f"params: {sum(p.numel() for p in model.parameters()):,}")                                 # print total parameter count
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, fused=True)                          # optimizer replaces manual parameter updates
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 2000, eta_min=1e-4)           # smoothly decays learning rate
+scheduler, start = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 2000, eta_min=1e-4), time.time() # smoothly decays learning rate
 
 # --- Train ---
 batch_size = 1024                                                                                 # number of samples per batch
-start = time.time()                                                                               # track training duration
 
 def get_batch():
     batch_idx = torch.randint(0, len(input_ids), (batch_size,))                                  # random batch indices (len(input_ids) is total examples)
@@ -49,7 +49,7 @@ for step in range(2001):
         with torch.no_grad(), torch.autocast('cuda', dtype=torch.float16):                       # disable tracking during evaluation
             eval_idx = torch.randint(0, len(input_ids), (4096,))                                 # subset evaluation to prevent GPU OOM
             pred_ids = model(input_ids[eval_idx]).argmax(1)                                      # dataset subset forward & argmax
-            print(f"Step {step:4d} | Loss: {loss:.4f} | Acc: {(pred_ids == target_ids[eval_idx]).float().mean():.1%}")
+            print(f"Step {step:4d} | Loss: {loss:.4f} | Acc: {(pred_ids == target_ids[eval_idx]).float().mean():.1%} | {time.time()-start:.1f}s")
 
 print(f"Training time: {time.time() - start:.1f}s")
 
