@@ -38,6 +38,7 @@ This file tracks training accuracy for language model experiments run on Google 
 | TinyTransformer.py | 68.5% | 2000 | 29.2s |
 | TinyTransformer.py (`context_size=8`, latest run) | 67.4% | 1600 | 25.4s |
 | TinyTransformer.py (`context_size=64`) | 68.5% | 1800 | 197.5s |
+| TinyTransformer.py (new run) | 68.0% | 2000 | 42.5s |
 | microgpt_lite.py | 79.4% | 3500 | 202.0s |
 
 ## Transformer Experiment Notes
@@ -70,6 +71,24 @@ Quick comparison:
 
 - Best accuracy: `67.4%` (`context_size=8`) vs `68.5%` (`context_size=64`) -> `+1.1` points.
 - Training time: `25.4s` (`context_size=8`) vs `197.5s` (`context_size=64`) -> about `7.8x` slower at `context_size=64`.
+
+### TinyTransformer New Run (42.5s)
+
+| Step | Loss | Accuracy |
+|---:|---:|---:|
+| 0 | 4.7246 | 19.3% |
+| 200 | 1.5028 | 53.8% |
+| 400 | 1.3832 | 59.0% |
+| 600 | 1.3600 | 61.3% |
+| 800 | 1.2023 | 63.4% |
+| 1000 | 1.2021 | 65.4% |
+| 1200 | 1.1426 | 65.5% |
+| 1400 | 1.1465 | 66.5% |
+| 1600 | 1.0482 | 66.6% |
+| 1800 | 1.0461 | 67.3% |
+| 2000 | 1.0870 | 68.0% |
+
+Training time: `42.5s`
 
 ## Generated Samples
 
@@ -113,6 +132,12 @@ The learry tried that her the corne but he saw two learned. She chess smal wife 
 ```text
 Once there was a little bird would help his friends to play unnot started to find his friends while it!
 The asked his mom park outside in the sun bag beak tree and got of the pick she could find the bird sa
+```
+
+### TinyTransformer.py (new run)
+
+```text
+Once there was a little bird would help them to measure. They had so happy to the park with her bed the cat on, and he looked at the head to help. They are red back well. One day, a big blue.
 ```
 
 ### microgpt_lite.py
