@@ -5,26 +5,34 @@ import torch.nn as nn, torch.nn.functional as F
 # Automatically create all tensors on GPU if available, removing manual device boilerplate
 torch.set_default_device('cuda' if torch.cuda.is_available() else 'cpu')
 
+# --- Hyperparameters ---
+context_size = 8                                                                                  # number of previous tokens used to predict next
+embed_dim    = 256                                                                                # token/positional embedding dimension (d_model)
+n_heads      = 4                                                                                  # number of attention heads in each transformer layer
+ffn_dim      = 1024                                                                               # feed-forward network hidden dimension
+n_layers     = 2                                                                                  # number of transformer encoder layers
+batch_size   = 1024                                                                               # number of samples per training step
+lr           = 1e-3                                                                               # initial learning rate
+n_steps      = 2001                                                                               # total training steps
+
 # --- Data & Tokenization ---
-context_size = 8
 input_ids, target_ids, idx_to_char, token_ids = load_tinystories(num_stories=1000, context_size=context_size) # previous chars to predict next
 input_ids, target_ids = torch.tensor(input_ids), torch.tensor(target_ids)                        # convert to tensors
 
 # --- Model ---
 torch.manual_seed(42)                                                                             # seed helper for reproducibility
-tok_embed = nn.Embedding(len(idx_to_char), 256)                                                  # token embedding lookup layer (256 is embed_dim)
-pos_embed = nn.Embedding(context_size, 256)                                                      # positional embedding for sequence order
-transformer = torch.compile(nn.TransformerEncoder(nn.TransformerEncoderLayer(256, 4, 1024, batch_first=True, dropout=0., norm_first=True), 2))
-linear = nn.Linear(256, len(idx_to_char))                                                        # maps hidden state to logits (vocab length)
+tok_embed = nn.Embedding(len(idx_to_char), embed_dim)                                            # token embedding lookup layer
+pos_embed = nn.Embedding(context_size, embed_dim)                                                # positional embedding for sequence order
+transformer = torch.compile(nn.TransformerEncoder(nn.TransformerEncoderLayer(embed_dim, n_heads, ffn_dim, batch_first=True, dropout=0., norm_first=True), n_layers))
+linear = nn.Linear(embed_dim, len(idx_to_char))                                                  # maps hidden state to logits (vocab length)
 
 params = list(tok_embed.parameters()) + list(pos_embed.parameters()) + list(transformer.parameters()) + list(linear.parameters())
 print(f"params: {sum(p.numel() for p in params):,}")
-optimizer = torch.optim.AdamW(params, lr=1e-3, betas=(0.9, 0.95), fused=True)                   # optimizer replaces manual parameter updates
-scheduler, start = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 2000, eta_min=1e-4), time.time() # smoothly decays learning rate
+optimizer = torch.optim.AdamW(params, lr=lr, betas=(0.9, 0.95), fused=True)                     # optimizer replaces manual parameter updates
+scheduler, start = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, n_steps, eta_min=1e-4), time.time() # smoothly decays learning rate
 
 # --- Train ---
-batch_size = 1024                                                                                 # number of samples per batch
-for step in range(2001):
+for step in range(n_steps):
     batch_idx = torch.randint(0, len(input_ids), (batch_size,))                                  # random batch indices (len(input_ids) is total examples)
     batch_x, batch_y = input_ids[batch_idx], target_ids[batch_idx]                               # fetch random mini-batch (inputs and labels)
 
