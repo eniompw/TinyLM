@@ -5,8 +5,12 @@ from tinystories_dataset import load_tinystories
 # Automatically create all tensors on GPU if available, removing manual device boilerplate
 torch.set_default_device('cuda' if torch.cuda.is_available() else 'cpu')
 
+# --- Hyperparameters ---
+context_size, embed_dim          = 8, 256                                                         # context window size; embedding dimension (d_model)
+n_heads, ffn_dim, n_layers       = 4, 1024, 2                                                     # attention heads; FFN hidden dim; transformer layers
+batch_size, lr, n_steps          = 1024, 1e-3, 2001                                               # samples per step; learning rate; total training steps
+
 # --- Data & Tokenization ---
-context_size = 8
 input_ids, target_ids, idx_to_char, token_ids = load_tinystories(num_stories=1000, context_size=context_size) # previous chars to predict next
 input_ids, target_ids = torch.tensor(input_ids), torch.tensor(target_ids)                        # convert to tensors
 
@@ -14,11 +18,11 @@ input_ids, target_ids = torch.tensor(input_ids), torch.tensor(target_ids)       
 torch.manual_seed(42)                                                                             # seed helper for reproducibility
 
 class TinyTransformer(nn.Module):
-    def __init__(self, vocab_size, embed_dim=256, context_size=8, num_heads=4, ffn_dim=1024, num_layers=2):
+    def __init__(self, vocab_size):
         super().__init__()
         self.tok_embed = nn.Embedding(vocab_size, embed_dim)                                      # token embedding lookup layer
         self.pos_embed = nn.Embedding(context_size, embed_dim)                                    # positional embedding for sequence order
-        self.transformer = torch.compile(nn.TransformerEncoder(nn.TransformerEncoderLayer(embed_dim, num_heads, ffn_dim, batch_first=True, dropout=0., norm_first=True), num_layers))
+        self.transformer = torch.compile(nn.TransformerEncoder(nn.TransformerEncoderLayer(embed_dim, n_heads, ffn_dim, batch_first=True, dropout=0., norm_first=True), n_layers))
         self.linear = nn.Linear(embed_dim, vocab_size)                                            # maps hidden state to logits (vocab length)
 
     def forward(self, x):
@@ -27,17 +31,15 @@ class TinyTransformer(nn.Module):
 
 model = TinyTransformer(len(idx_to_char))
 print(f"params: {sum(p.numel() for p in model.parameters()):,}")                                 # print total parameter count
-optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, fused=True)                          # optimizer replaces manual parameter updates
-scheduler, start = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 2000, eta_min=1e-4), time.time() # smoothly decays learning rate
+optimizer = torch.optim.AdamW(model.parameters(), lr=lr, betas=(0.9, 0.95), fused=True)         # optimizer replaces manual parameter updates
+scheduler, start = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, n_steps, eta_min=1e-4), time.time() # smoothly decays learning rate
 
 # --- Train ---
-batch_size = 1024                                                                                 # number of samples per batch
-
 def get_batch():
     batch_idx = torch.randint(0, len(input_ids), (batch_size,))                                  # random batch indices (len(input_ids) is total examples)
     return input_ids[batch_idx], target_ids[batch_idx]                                           # fetch random mini-batch (inputs and labels)
 
-for step in range(2001):
+for step in range(n_steps):
     batch_x, batch_y = get_batch()
 
     with torch.autocast('cuda', dtype=torch.float16):                                            # float16 mixed precision for speed
