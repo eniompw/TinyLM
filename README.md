@@ -26,15 +26,17 @@ The code is intentionally short so you can read end-to-end training and sampling
 
 ## Repository contents
 
-- `NameSLP.py`: NumPy single-layer perceptron trained on character windows from the names dataset.
-- `names_dataset.py`: Karpathy names data loader with character encoding and one-hot context features.
-- `TinyMLP.py`: CuPy character MLP with a learned embedding table and one hidden layer.
-- `tinystories_dataset.py`: shared TinyStories data loader and character-level preprocessing utility.
-- `TinyMLP.ipynb`: notebook version of the CuPy model.
-- `TinyMLP-explained.md`: a short walkthrough of `TinyMLP.py`, including data flow, tensor shapes, and manual gradient steps.
-- `TorchMLP.py`: PyTorch equivalent of `TinyMLP.py` using autograd and the same core architecture.
-- `TinyTransformer.py`: PyTorch character-level transformer encoder model with token + positional embeddings, mixed precision training, and autoregressive sampling.
-- `TinyTransformer-explained.md`: a walkthrough of `TinyTransformer.py`, including architecture choices, training flow, and speed/quality optimization notes.
+| File | Description |
+|------|-------------|
+| `NameSLP.py` | NumPy single-layer perceptron trained on character windows from the names dataset |
+| `names_dataset.py` | Karpathy names data loader with character encoding and one-hot context features |
+| `TinyMLP.py` | CuPy character MLP with a learned embedding table and one hidden layer |
+| `tinystories_dataset.py` | Shared TinyStories data loader and character-level preprocessing utility |
+| `TinyMLP.ipynb` | Notebook version of the CuPy model |
+| `TinyMLP-explained.md` | Walkthrough of `TinyMLP.py` including data flow, tensor shapes, and manual gradient steps |
+| `TorchMLP.py` | PyTorch equivalent of `TinyMLP.py` using autograd and the same core architecture |
+| `TinyTransformer.py` | PyTorch character-level transformer encoder with token + positional embeddings, mixed precision, and autoregressive sampling |
+| `TinyTransformer-explained.md` | Walkthrough of `TinyTransformer.py` including architecture choices, training flow, and speed/quality optimization notes |
 
 ## Models
 
