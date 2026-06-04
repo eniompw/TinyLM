@@ -6,13 +6,14 @@ TinyLM is a small character-level language modeling playground.
 >
 > This series continues with [MicroGPT](https://github.com/eniompw/MicroGPT), where the character-level model is scaled up to a decoder-only transformer.
 
-It contains four compact implementations that train character-level models and generate text autoregressively:
+It contains five compact implementations that train character-level models and generate text autoregressively:
 
 - a NumPy single-layer perceptron baseline for names generation
 - a CuPy character MLP with learned embeddings
 - a PyTorch character MLP equivalent to `TinyMLP.py`
 - a compact PyTorch transformer encoder language model
 - an OOP refactor of the transformer using `nn.Module`
+- a modern Llama-style transformer with RoPE, RMSNorm, SiLU, and `torch.compile`
 
 The code is intentionally short so you can read end-to-end training and sampling in one sitting.
 
@@ -39,6 +40,7 @@ The code is intentionally short so you can read end-to-end training and sampling
 | `TinyTransformer.py` | PyTorch character-level transformer encoder with token + positional embeddings, mixed precision, and autoregressive sampling |
 | `TinyTransformer-explained.md` | Walkthrough of `TinyTransformer.py` including architecture choices, training flow, and speed/quality optimization notes |
 | `TinyTransformerClass.py` | OOP refactor of `TinyTransformer.py` wrapping the model in an `nn.Module` class with a `get_batch()` helper function |
+| `LlamaLite.py` | Modern Llama-style transformer with RoPE, RMSNorm, SiLU, fused AdamW, mixed precision, and `torch.compile` |
 
 ## Models
 
@@ -89,6 +91,19 @@ The code is intentionally short so you can read end-to-end training and sampling
 - Extracts batch sampling into a standalone `get_batch()` function.
 - Keeps all original comments, section headers, and training/generation logic unchanged.
 
+### 6) `LlamaLite.py` (modern Llama-style transformer)
+
+- Uses context windows of length 256 (`context_size`).
+- Loads TinyStories data via `load_tinystories(...)` from `tinystories_dataset.py`.
+- Uses `num_stories=1000` to choose how many streamed TinyStories records to train on.
+- Architecture: token embedding -> 2-layer `ModernBlock` (RoPE, RMSNorm, SiLU MLP) -> weight-tied lm_head.
+- Replaces sinusoidal positional embeddings with Rotary Position Embeddings (RoPE).
+- Replaces LayerNorm with RMSNorm and GELU with SiLU activation.
+- Trains with fused AdamW, `GradScaler`, autocast float16, gradient clipping, and cosine LR decay.
+- Compiled with `torch.compile` for ~2x GPU kernel speedup.
+- Prints device info, param count, and elapsed time at each eval step.
+- Generates text autoregressively with temperature-controlled sampling.
+
 ## Requirements
 
 - Python 3.10+
@@ -108,6 +123,7 @@ Hardware notes:
 - `TorchMLP.py` auto-selects `cuda` when available and otherwise runs on `cpu`.
 - `TinyTransformer.py` is optimized for CUDA (`torch.compile`, AMP, fused AdamW) and is best run with a modern PyTorch + GPU setup.
 - `TinyTransformerClass.py` shares the same hardware requirements as `TinyTransformer.py`.
+- `LlamaLite.py` shares the same hardware requirements as `TinyTransformerClass.py`.
 
 ## Accuracy tracker
 
@@ -117,7 +133,7 @@ Training accuracy snapshots and generated sample comparisons are tracked in [mod
 
 - Source: `names.txt` from `karpathy/makemore` (downloaded directly from GitHub).
 - Source: `karpathy/tinystories-gpt4-clean` via Hugging Face Datasets (streaming mode).
-- Helper loaders: `names_dataset.py` (for `NameSLP.py`) and `tinystories_dataset.py` (for `TinyMLP.py`, `TorchMLP.py`, `TinyTransformer.py`, and `TinyTransformerClass.py`).
+- Helper loaders: `names_dataset.py` (for `NameSLP.py`) and `tinystories_dataset.py` (for `TinyMLP.py`, `TorchMLP.py`, `TinyTransformer.py`, `TinyTransformerClass.py`, and `LlamaLite.py`).
 - Tokenization is character-level, keeping the project simple and educational.
 
 ## Suggested next improvements
