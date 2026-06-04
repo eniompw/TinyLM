@@ -98,9 +98,8 @@ The training loop is still simple and compact:
 1. Sample random mini-batch indices.
 2. Run forward pass with mixed precision autocast.
 3. Compute cross-entropy loss.
-4. Backprop with gradient scaling.
-5. Unscale, clip gradients, optimizer step, scheduler step.
-6. Print periodic evaluation accuracy.
+4. Backprop, optimizer step, scheduler step.
+5. Print periodic evaluation accuracy.
 
 The key difference vs `TorchMLP.py` is that many performance and stability techniques are combined in one loop.
 
@@ -114,23 +113,19 @@ https://github.com/eniompw/MicroGPT
 `torch.compile(...)` traces and fuses model operations into optimized kernels.
 This reduces Python overhead and kernel launch fragmentation, often giving large speedups on GPU-heavy code.
 
-### 2) `float16` autocast + `GradScaler`
+### 2) `float16` autocast
 
 ```python
 with torch.autocast('cuda', dtype=torch.float16):
     ...
-scaler = torch.amp.GradScaler('cuda')
 ```
 
-- `float16` reduces memory traffic and accelerates matrix math on modern GPUs.
-- `GradScaler` prevents tiny gradients from underflowing to zero during backprop.
-
-This gives most of the AMP speed benefit while keeping training numerically safe.
+`float16` reduces memory traffic and accelerates matrix math on modern GPUs.
 
 ### 3) Fused AdamW
 
 ```python
-optimizer = torch.optim.AdamW(params, lr=1e-3, fused=True)
+optimizer = torch.optim.AdamW(params, lr=1e-3, betas=(0.9, 0.95), fused=True)
 ```
 
 With `fused=True`, parameter updates are grouped into optimized CUDA kernels instead of many small launches.
@@ -161,7 +156,6 @@ scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
 ### 2) Gradient clipping
 
 ```python
-scaler.unscale_(optimizer)
 torch.nn.utils.clip_grad_norm_(params, 1.0)
 ```
 
@@ -169,9 +163,6 @@ Clipping at `1.0` prevents rare extreme batches from causing unstable jumps.
 This is especially helpful in transformer training where occasional spikes can derail progress.
 
 ### 3) AdamW momentum tuning (`betas=(0.9, 0.95)`)
-
-The condensed notes include `betas=(0.9, 0.95)` as an additional quality tweak.
-In this file, optimizer betas are currently left at PyTorch defaults. If you want exact parity with the note, use:
 
 ```python
 optimizer = torch.optim.AdamW(
@@ -182,7 +173,7 @@ optimizer = torch.optim.AdamW(
 )
 ```
 
-Lower second beta than default can make the optimizer react faster to recent gradient patterns in transformer workloads.
+Lower second beta than the PyTorch default (`0.999`) makes the optimizer react faster to recent gradient patterns in transformer workloads.
 
 ### 4) Inference temperature (`0.7`)
 
