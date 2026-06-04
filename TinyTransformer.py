@@ -19,7 +19,6 @@ linear = nn.Linear(256, len(idx_to_char))                                       
 
 params = list(tok_embed.parameters()) + list(pos_embed.parameters()) + list(transformer.parameters()) + list(linear.parameters())
 optimizer = torch.optim.AdamW(params, lr=1e-3, fused=True)                                       # optimizer replaces manual parameter updates
-scaler = torch.amp.GradScaler('cuda')                                                            # scaler prevents float16 underflow
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 2000, eta_min=1e-4)            # smoothly decays learning rate
 
 # --- Train ---
@@ -33,10 +32,7 @@ for step in range(2001):
         x = tok_embed(batch_x) + pos_embed(torch.arange(context_size))                          # add token and positional embeddings
         loss = F.cross_entropy(linear(transformer(x)[:, -1, :]), batch_y)                        # computes softmax and cross-entropy loss automatically
 
-    optimizer.zero_grad(set_to_none=True)                                                        # zero out gradients for the next iteration
-    scaler.scale(loss).backward()                                                                # autograd automatically computes scaled gradients
-    scaler.unscale_(optimizer); torch.nn.utils.clip_grad_norm_(params, 1.0)                      # unscale and clip to prevent loss spikes
-    scaler.step(optimizer); scaler.update(); scheduler.step()                                    # parameter update, scaler update, and lr decay
+    optimizer.zero_grad(); loss.backward(); optimizer.step(); scheduler.step()                   # zero grads, backprop, AdamW update, and lr decay
 
     if step % 200 == 0:
         with torch.no_grad(), torch.autocast('cuda', dtype=torch.float16):                       # disable tracking during evaluation
