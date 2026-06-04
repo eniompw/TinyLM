@@ -15,19 +15,19 @@ This file tracks training accuracy for language model experiments run on Google 
 
 **Key:** TT = TinyTransformer.py, TTC = TinyTransformerClass.py, µGPT = microgpt_lite.py
 
-| Epoch | NameSLP.py | TinyMLP.py | TorchMLP.py | TT | TTC | µGPT | LlamaLite | TT (4 layers) |
+| Epoch | NameSLP.py | TinyMLP.py | TorchMLP.py | TT (2 layers) | TTC | µGPT | LlamaLite | TT (4 layers) |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 0 | 3.5% | 4.7% | 21.4% | 19.2% | 19.3% | 1.7% | 19.6% | 19.3% |
-| 200 | 37.1% | 44.8% | 54.3% | 54.6% | 54.7% | 53.6% | 47.3% | 56.7% |
-| 400 | 38.2% | 48.9% | 58.0% | 59.5% | 58.7% | 65.2% | 53.7% | 60.5% |
-| 600 | 38.6% | 52.3% | 59.1% | 61.0% | 60.6% | 68.6% | 57.1% | 62.5% |
-| 800 | 38.9% | 55.0% | 59.9% | 63.7% | 63.9% | 71.4% | 58.3% | 65.2% |
-| 1000 | 39.1% | 56.4% | 60.8% | 66.3% | 65.1% | 71.9% | 60.9% | 67.2% |
-| 1200 | 39.2% | 56.7% | 61.4% | 66.0% | 64.9% | 73.3% | 62.6% | 67.1% |
-| 1400 | 39.4% | 58.2% | 60.8% | 67.4% | 66.8% | 74.6% | 63.0% | 68.1% |
-| 1600 | 39.5% | 58.3% | 61.8% | 67.4% | 66.8% | 76.0% | 64.1% | 69.1% |
-| 1800 | 39.5% | 59.2% | 61.1% | 67.9% | 67.8% | 75.9% | 66.4% | 70.0% |
-| 2000 | 39.6% | 59.4% | 62.4% | 68.4% | 68.1% | 77.0% | 65.6% | 70.8% |
+| 0 | 3.5% | 4.7% | 21.4% | 19.3% | 19.3% | 1.7% | 19.6% | 19.3% |
+| 200 | 37.1% | 44.8% | 54.3% | 54.8% | 54.7% | 53.6% | 47.3% | 56.7% |
+| 400 | 38.2% | 48.9% | 58.0% | 58.3% | 58.7% | 65.2% | 53.7% | 60.5% |
+| 600 | 38.6% | 52.3% | 59.1% | 60.4% | 60.6% | 68.6% | 57.1% | 62.5% |
+| 800 | 38.9% | 55.0% | 59.9% | 63.2% | 63.9% | 71.4% | 58.3% | 65.2% |
+| 1000 | 39.1% | 56.4% | 60.8% | 65.4% | 65.1% | 71.9% | 60.9% | 67.2% |
+| 1200 | 39.2% | 56.7% | 61.4% | 65.5% | 64.9% | 73.3% | 62.6% | 67.1% |
+| 1400 | 39.4% | 58.2% | 60.8% | 66.0% | 66.8% | 74.6% | 63.0% | 68.1% |
+| 1600 | 39.5% | 58.3% | 61.8% | 67.0% | 66.8% | 76.0% | 64.1% | 69.1% |
+| 1800 | 39.5% | 59.2% | 61.1% | 67.7% | 67.8% | 75.9% | 66.4% | 70.0% |
+| 2000 | 39.6% | 59.4% | 62.4% | 67.4% | 68.1% | 77.0% | 65.6% | 70.8% |
 | 3500 | - | - | - | - | - | 79.4% | - | - |
 
 ## Summary Comparison
@@ -37,7 +37,7 @@ This file tracks training accuracy for language model experiments run on Google 
 | NameSLP.py | 39.6% | 2000 | 35.1s |
 | TinyMLP.py | 59.4% | 2000 | 3.9s |
 | TorchMLP.py | 62.4% | 2000 | 3.6s |
-| TinyTransformer.py | 68.4% | 2000 | 20.9s |
+| TinyTransformer.py (2 layers, 1,614,400 params) | 67.7% | 1800 | 21.1s |
 | TinyTransformer.py (`context_size=8`, prev run) | 67.4% | 1600 | 25.4s |
 | TinyTransformer.py (`context_size=64`) | 68.5% | 1800 | 197.5s |
 | TinyTransformer.py (4 layers, 3,193,920 params) | 70.8% | 2000 | 41.4s |
@@ -49,8 +49,31 @@ This file tracks training accuracy for language model experiments run on Google 
 
 - `5000` TinyStories often causes CUDA OOM/crash in this setup.
 - Increasing transformer context window to `64` made training much slower, with only a small accuracy gain in this pair of runs.
-- Increasing from 2 → 4 layers improved best accuracy from 68.4% to 70.8% (+2.4 points) at the cost of ~2x longer training time (20.9s → 41.4s) and ~2x more parameters (1.6M → 3.2M).
 - First cold run of 4-layer model was 71.9s due to Colab initialisation overhead; warm runs settle at ~41.4s.
+
+### TinyTransformer Layer Depth Comparison (2 vs 4 layers)
+
+| Epoch | 2 layers (1,614,400 params) | 4 layers (3,193,920 params) |
+|---:|---:|---:|
+| 0 | 19.3% | 19.3% |
+| 200 | 54.8% | 56.7% |
+| 400 | 58.3% | 60.5% |
+| 600 | 60.4% | 62.5% |
+| 800 | 63.2% | 65.2% |
+| 1000 | 65.4% | 67.2% |
+| 1200 | 65.5% | 67.1% |
+| 1400 | 66.0% | 68.1% |
+| 1600 | 67.0% | 69.1% |
+| 1800 | 67.7% | 70.0% |
+| 2000 | 67.4% | 70.8% |
+
+Training time: `21.1s` (2 layers) vs `41.4s` (4 layers) → ~2x slower.
+
+Quick comparison:
+
+- Best accuracy: `67.7%` (2 layers) vs `70.8%` (4 layers) → `+3.1` points.
+- Training time: `21.1s` (2 layers) vs `41.4s` (4 layers) → about `2x` slower with 4 layers.
+- Parameters: `1,614,400` (2 layers) vs `3,193,920` (4 layers) → ~2x more parameters.
 
 ### TinyTransformer Context Size Accuracy Comparison
 
@@ -115,10 +138,10 @@ Once upon a time, to mak,""
 The learry tried that her the corne but he saw two learned. She chess smal wife sell best couldn't my her and ran was a big for naughed loved clean withing. Mommy!"I will magin
 ```
 
-### TinyTransformer.py
+### TinyTransformer.py (2 layers)
 
 ```text
-Once there. She wise her bird was full and went out the thought it was too take a gift the big slid it, so he did not play and sun that day on, but they decided to go something for a moment finally
+Once there. She wise her bird was family face on on the thought it was so happy and put the tent down and said, "Mom, Tim, and they also much fun. They are red back well. One day, a big boy named Tim.
 ```
 
 ### TinyTransformer.py (4 layers)
