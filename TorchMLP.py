@@ -22,34 +22,26 @@ optimizer = torch.optim.SGD(list(embed.parameters()) + list(model.parameters()),
 batch_size = 1024                                                                       # number of samples per batch
 start = time.time()                                                                     # track training duration
 for epoch in range(2001):
-    batch_indices = torch.randint(0, len(inputs), (batch_size,))                        # random batch indices (len(inputs) is total examples)
-    batch_inputs, batch_targets = inputs[batch_indices], targets[batch_indices]         # fetch random mini-batch (inputs and labels)
-
-    # Forward pass
-    emb = embed(batch_inputs).view(batch_size, -1)                                      # concatenate embeddings for the window
-    logits = model(emb)                                                                 # forward pass through linear layers
-    loss = F.cross_entropy(logits, batch_targets)                                       # computes softmax and cross-entropy loss automatically
-
-    # Backward pass
-    optimizer.zero_grad()                                                               # zero out gradients for the next iteration
-    loss.backward()                                                                     # autograd automatically computes gradients
-    optimizer.step()                                                                    # standard SGD parameter update
+    idx = torch.randint(0, len(inputs), (batch_size,))                                  # random batch indices (len(inputs) is total examples)
+    emb = embed(inputs[idx]).view(batch_size, -1)                                       # concatenate embeddings for the window
+    loss = F.cross_entropy(model(emb), targets[idx])                                    # computes softmax and cross-entropy loss automatically
+    optimizer.zero_grad(); loss.backward(); optimizer.step()                            # zero grads, backprop, SGD update
 
     if epoch % 200 == 0:
         with torch.no_grad():                                                           # disable tracking during evaluation
             preds = model(embed(inputs).view(len(inputs), -1)).argmax(1)                # full dataset (len(inputs)) forward & argmax
-            print(f"Epoch {epoch:4d} | Acc: {(preds == targets).float().mean():.1%}")
+            print(f"Epoch {epoch:4d} | Loss: {loss:.4f} | Acc: {(preds == targets).float().mean():.1%}")
 
 print(f"Training time: {time.time() - start:.1f}s")
 
 # --- Generate ---
 @torch.no_grad()                                                                        # disable autograd tracking during inference
 def generate(num_chars=200, context=list(encoded_text[:4])):                            # start with true initial context (4 chars)
-    generated_text = [vocab[i] for i in context]                                        # decode initial context to string
+    out = [vocab[i] for i in context]                                                   # decode initial context to string
     for _ in range(num_chars):
-        probabilities = torch.softmax(model(embed(torch.tensor([context])).view(1, -1)), 1) # fused forward pass
-        next_id = torch.multinomial(probabilities, 1).item()                            # randomly sample from predicted distribution
-        context, generated_text = context[1:] + [next_id], generated_text + [vocab[next_id]] # slide window forward and append string
-    return ''.join(generated_text)
+        probs = torch.softmax(model(embed(torch.tensor([context])).view(1, -1)), 1)     # fused forward pass
+        nxt = torch.multinomial(probs, 1).item()                                        # randomly sample from predicted distribution
+        context, out = context[1:] + [nxt], out + [vocab[nxt]]                         # slide window forward and append string
+    return ''.join(out)
 
 print(generate())
