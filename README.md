@@ -12,6 +12,7 @@ It contains four compact implementations that train character-level models and g
 - a CuPy character MLP with learned embeddings
 - a PyTorch character MLP equivalent to `TinyMLP.py`
 - a compact PyTorch transformer encoder language model
+- an OOP refactor of the transformer using `nn.Module`
 
 The code is intentionally short so you can read end-to-end training and sampling in one sitting.
 
@@ -37,6 +38,7 @@ The code is intentionally short so you can read end-to-end training and sampling
 | `TorchMLP.py` | PyTorch equivalent of `TinyMLP.py` using autograd and the same core architecture |
 | `TinyTransformer.py` | PyTorch character-level transformer encoder with token + positional embeddings, mixed precision, and autoregressive sampling |
 | `TinyTransformer-explained.md` | Walkthrough of `TinyTransformer.py` including architecture choices, training flow, and speed/quality optimization notes |
+| `TinyTransformerClass.py` | OOP refactor of `TinyTransformer.py` wrapping the model in an `nn.Module` class with a `get_batch()` helper function |
 
 ## Models
 
@@ -79,6 +81,14 @@ The code is intentionally short so you can read end-to-end training and sampling
 - Uses automatic device selection (`cuda` when available, otherwise `cpu`) via `torch.set_default_device(...)`.
 - Generates text autoregressively with temperature-controlled sampling.
 
+### 5) `TinyTransformerClass.py` (OOP refactor of `TinyTransformer.py`)
+
+- Same architecture and training setup as `TinyTransformer.py`.
+- Wraps `tok_embed`, `pos_embed`, `transformer`, and `linear` in a `TinyTransformer(nn.Module)` class.
+- Exposes a `forward(x)` method, enabling standard PyTorch patterns such as `model.parameters()`.
+- Extracts batch sampling into a standalone `get_batch()` function.
+- Keeps all original comments, section headers, and training/generation logic unchanged.
+
 ## Requirements
 
 - Python 3.10+
@@ -97,6 +107,7 @@ Hardware notes:
 - `TinyMLP.py` uses CuPy, so it expects a compatible CUDA setup.
 - `TorchMLP.py` auto-selects `cuda` when available and otherwise runs on `cpu`.
 - `TinyTransformer.py` is optimized for CUDA (`torch.compile`, AMP, fused AdamW) and is best run with a modern PyTorch + GPU setup.
+- `TinyTransformerClass.py` shares the same hardware requirements as `TinyTransformer.py`.
 
 ## Accuracy tracker
 
@@ -106,7 +117,7 @@ Training accuracy snapshots and generated sample comparisons are tracked in [mod
 
 - Source: `names.txt` from `karpathy/makemore` (downloaded directly from GitHub).
 - Source: `karpathy/tinystories-gpt4-clean` via Hugging Face Datasets (streaming mode).
-- Helper loaders: `names_dataset.py` (for `NameSLP.py`) and `tinystories_dataset.py` (for `TinyMLP.py`, `TorchMLP.py`, and `TinyTransformer.py`).
+- Helper loaders: `names_dataset.py` (for `NameSLP.py`) and `tinystories_dataset.py` (for `TinyMLP.py`, `TorchMLP.py`, `TinyTransformer.py`, and `TinyTransformerClass.py`).
 - Tokenization is character-level, keeping the project simple and educational.
 
 ## Suggested next improvements
