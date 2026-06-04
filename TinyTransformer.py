@@ -1,6 +1,6 @@
 import time, torch
 import torch.nn as nn, torch.nn.functional as F
-from tinystories_dataset import load_tinystories
+#from tinystories_dataset import load_tinystories
 
 # Automatically create all tensors on GPU if available, removing manual device boilerplate
 torch.set_default_device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -18,12 +18,12 @@ transformer = torch.compile(nn.TransformerEncoder(nn.TransformerEncoderLayer(256
 linear = nn.Linear(256, len(idx_to_char))                                                        # maps hidden state to logits (vocab length)
 
 params = list(tok_embed.parameters()) + list(pos_embed.parameters()) + list(transformer.parameters()) + list(linear.parameters())
-optimizer = torch.optim.AdamW(params, lr=1e-3, fused=True)                                       # optimizer replaces manual parameter updates
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 2000, eta_min=1e-4)            # smoothly decays learning rate
+print(f"params: {sum(p.numel() for p in params):,}")
+optimizer = torch.optim.AdamW(params, lr=1e-3, betas=(0.9, 0.95), fused=True)                   # optimizer replaces manual parameter updates
+scheduler, start = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 2000, eta_min=1e-4), time.time() # smoothly decays learning rate
 
 # --- Train ---
 batch_size = 1024                                                                                 # number of samples per batch
-start = time.time()                                                                               # track training duration
 for step in range(2001):
     batch_idx = torch.randint(0, len(input_ids), (batch_size,))                                  # random batch indices (len(input_ids) is total examples)
     batch_x, batch_y = input_ids[batch_idx], target_ids[batch_idx]                               # fetch random mini-batch (inputs and labels)
@@ -39,7 +39,7 @@ for step in range(2001):
             eval_idx = torch.randint(0, len(input_ids), (4096,))                                 # subset evaluation to prevent GPU OOM
             x_eval = tok_embed(input_ids[eval_idx]) + pos_embed(torch.arange(context_size))     # embed dataset subset
             pred_ids = linear(transformer(x_eval)[:, -1, :]).argmax(1)                          # dataset subset forward & argmax
-            print(f"Step {step:4d} | Loss: {loss:.4f} | Acc: {(pred_ids == target_ids[eval_idx]).float().mean():.1%}")
+            print(f"Step {step:4d} | Loss: {loss:.4f} | Acc: {(pred_ids == target_ids[eval_idx]).float().mean():.1%} | {time.time()-start:.1f}s")
 
 print(f"Training time: {time.time() - start:.1f}s")
 
