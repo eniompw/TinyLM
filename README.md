@@ -30,17 +30,22 @@ The code is intentionally short so you can read end-to-end training and sampling
 
 | File | Description |
 |------|-------------|
-| `NameSLP.py` | NumPy single-layer perceptron trained on character windows from the names dataset |
-| `names_dataset.py` | Karpathy names data loader with character encoding and one-hot context features |
-| `TinyMLP.py` | CuPy character MLP with a learned embedding table and one hidden layer |
-| `tinystories_dataset.py` | Shared TinyStories data loader and character-level preprocessing utility |
-| `TinyMLP.ipynb` | Notebook version of the CuPy model |
-| `TinyMLP-explained.md` | Walkthrough of `TinyMLP.py` including data flow, tensor shapes, and manual gradient steps |
-| `TorchMLP.py` | PyTorch equivalent of `TinyMLP.py` using autograd and the same core architecture |
-| `TinyTransformer.py` | PyTorch character-level transformer encoder with token + positional embeddings, mixed precision, and autoregressive sampling |
-| `TinyTransformer-explained.md` | Walkthrough of `TinyTransformer.py` including architecture choices, training flow, and speed/quality optimization notes |
-| `TinyTransformerClass.py` | OOP refactor of `TinyTransformer.py` wrapping the model in an `nn.Module` class with a `get_batch()` helper function |
-| `TinyLlama.py` | Modern Llama-style transformer with RoPE, RMSNorm, SiLU, fused AdamW, mixed precision, and `torch.compile` |
+| [README.md](README.md) | Project overview, model summaries, requirements, and roadmap |
+| [.gitignore](.gitignore) | Git ignore rules for local/generated files |
+| [LICENSE](LICENSE) | Repository license |
+| [benchmarks.md](benchmarks.md) | Training snapshots and generated sample comparisons |
+| [TODO.md](TODO.md) | Task list and planned follow-ups |
+| [NameSLP.py](NameSLP.py) | NumPy single-layer perceptron trained on character windows from the names dataset |
+| [names_dataset.py](names_dataset.py) | Karpathy names data loader with character encoding and one-hot context features |
+| [TinyMLP.py](TinyMLP.py) | CuPy character MLP with a learned embedding table and one hidden layer |
+| [tinystories_dataset.py](tinystories_dataset.py) | Shared TinyStories data loader and character-level preprocessing utility |
+| [TinyMLP.ipynb](TinyMLP.ipynb) | Notebook version of the CuPy model |
+| [TinyMLP-explained.md](TinyMLP-explained.md) | Walkthrough of `TinyMLP.py` including data flow, tensor shapes, and manual gradient steps |
+| [TorchMLP.py](TorchMLP.py) | PyTorch equivalent of `TinyMLP.py` using autograd and the same core architecture |
+| [TinyTransformer.py](TinyTransformer.py) | PyTorch character-level transformer encoder with token + positional embeddings, mixed precision, and autoregressive sampling |
+| [TinyTransformer-explained.md](TinyTransformer-explained.md) | Walkthrough of `TinyTransformer.py` including architecture choices, training flow, and speed/quality optimization notes |
+| [TinyTransformerClass.py](TinyTransformerClass.py) | OOP refactor of `TinyTransformer.py` wrapping the model in an `nn.Module` class with a `get_batch()` helper function |
+| [TinyLlama.py](TinyLlama.py) | Modern Llama-style transformer with RoPE, RMSNorm, SiLU, fused AdamW, mixed precision, and `torch.compile` |
 
 ## Models
 
