@@ -31,7 +31,6 @@ The code is intentionally short so you can read end-to-end training and sampling
 | File | Description |
 |------|-------------|
 | [README.md](README.md) | Project overview, model summaries, requirements, and roadmap |
-| [.gitignore](.gitignore) | Git ignore rules for local/generated files |
 | [LICENSE](LICENSE) | Repository license |
 | [benchmarks.md](benchmarks.md) | Training snapshots and generated sample comparisons |
 | [TODO.md](TODO.md) | Task list and planned follow-ups |
