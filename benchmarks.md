@@ -46,6 +46,8 @@ This file tracks training accuracy for language model experiments run on Google 
 | TorchMLP.py | 62.4% | 2000 | 3.6s |
 | TinyTransformer.py (2 layers, 1,614,400 params) | 67.7% | 1800 | 21.1s |
 | TinyTransformer.py (`context_size=8`, prev run) | 67.4% | 1600 | 25.4s |
+| TinyTransformer.py (`context_size=8`, cold run) | 67.9% | 2000 | 46.3s |
+| TinyTransformer.py (`context_size=8`, warm run) | 68.4% | 2000 | 19.7s |
 | TinyTransformer.py (`context_size=64`) | 68.5% | 1800 | 197.5s |
 | TinyTransformer.py (4 layers, 3,193,920 params) | 73.1% | 3400 | 79.9s |
 | TinyTransformerClass.py (1,614,400 params) | 68.1% | 2000 | 19.3s |
@@ -58,6 +60,25 @@ This file tracks training accuracy for language model experiments run on Google 
 - Increasing transformer context window to `64` made training much slower, with only a small accuracy gain in this pair of runs.
 - First cold run of 4-layer model was 71.9s due to Colab initialisation overhead; warm runs settle at ~41.4s.
 - Running 4 layers to 3500 steps (79.9s) reaches 73.1%, closing the gap with µGPT (79.4%) at a fraction of the training time (202.0s).
+- `torch.compile` causes a ~26s cold-start overhead on the first run (46.3s total) as PyTorch's Inductor compiles and caches CUDA kernels. Subsequent warm runs reuse the compiled kernel cache and run at 19.7s — the true steady-state training speed.
+
+### torch.compile Cold vs Warm Run (TinyTransformer, 2 layers, context_size=8)
+
+| Step | Cold Run Acc | Cold Run Time | Warm Run Acc | Warm Run Time |
+|---:|---:|---:|---:|---:|
+| 0 | 19.3% | 27.2s | 19.1% | 0.0s |
+| 200 | 54.8% | 29.1s | 54.6% | 2.1s |
+| 400 | 58.7% | 31.0s | 59.0% | 4.0s |
+| 600 | 60.6% | 32.9s | 60.4% | 5.9s |
+| 800 | 62.6% | 34.8s | 63.5% | 7.9s |
+| 1000 | 65.5% | 36.7s | 65.6% | 9.8s |
+| 1200 | 65.3% | 38.6s | 65.9% | 11.8s |
+| 1400 | 66.8% | 40.5s | 67.5% | 13.8s |
+| 1600 | 67.3% | 42.4s | 67.3% | 15.7s |
+| 1800 | 67.3% | 44.4s | 67.6% | 17.7s |
+| 2000 | 67.9% | 46.3s | 68.4% | 19.7s |
+
+The ~26s cold-start overhead is entirely front-loaded at Step 0 (27.2s vs 0.0s). Per-step speed is identical (~1.9s/200 steps) in both runs. The Inductor kernel cache persists between runs within the same session (or to disk via `TORCHINDUCTOR_FX_GRAPH_CACHE=1`).
 
 ### TinyTransformer Layer Depth Comparison (2 vs 4 layers)
 
