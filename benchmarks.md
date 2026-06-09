@@ -14,6 +14,8 @@ This file tracks training accuracy for language model experiments run on Google 
   - [bfloat16 vs float16 on T4](#bfloat16-vs-float16-on-t4)
   - [Weight Tying Experiment](#weight-tying-experiment)
   - [GELU vs ReLU Activation](#gelu-vs-relu-activation)
+  - [Positional Embedding Ablation](#positional-embedding-ablation)
+- [Ablation Summary](#ablation-summary)
 - [Generated Samples](#generated-samples)
 
 ## Runtime Environment
@@ -69,6 +71,7 @@ This file tracks training accuracy for language model experiments run on Google 
 | TinyTransformer.py (bfloat16, T4) | 68.6% | 2000 | 82.0s |
 | TinyTransformer.py (weight tying) | 65.2% | 2000 | 27.2s |
 | TinyTransformer.py (GELU activation) | 68.1% | 2000 | 23.9s |
+| TinyTransformer.py (no pos_embed) | 59.8% | 2000 | 21.1s |
 
 ## Transformer Experiment Notes
 
@@ -214,6 +217,38 @@ Change: `activation='gelu'` added to `nn.TransformerEncoderLayer` (1 argument, d
 Run 3 times (warm). Baseline per-step: ~2.1s/200 steps. GELU per-step: ~2.4s/200 steps.
 
 **Conclusion:** GELU is **consistently ~14% slower** per step than ReLU on the T4, with **identical final accuracy** (68.1%). GELU's smoother gradient curve provides no benefit at this scale. The slowdown is because GELU involves an `erf()` computation vs ReLU's simple threshold — `torch.compile` cannot fully eliminate this overhead at small batch/context sizes. **Do not use GELU on T4 — keep default ReLU.**
+
+### Positional Embedding Ablation
+
+Change: removed `pos_embed = nn.Embedding(context_size, embed_dim)` and all three `+ pos_embed(torch.arange(context_size))` additions (train loop, eval block, generate). Parameters drop from 1,614,400 → 1,612,352 (−2,048 = context_size × embed_dim).
+
+| Step | Accuracy (with pos_embed) | Time | Accuracy (no pos_embed) | Time |
+|---:|---:|---:|---:|---:|
+| 0 | 19.3% | 0.0s | 21.0% | 0.0s |
+| 200 | 53.7% | 2.2s | 44.7% | 2.2s |
+| 400 | 58.9% | 4.3s | 49.0% | 4.4s |
+| 600 | 60.7% | 6.4s | 50.7% | 6.5s |
+| 800 | 63.6% | 8.5s | 54.4% | 8.6s |
+| 1000 | 64.9% | 10.6s | 54.6% | 10.7s |
+| 1200 | 65.5% | 12.8s | 56.2% | 12.8s |
+| 1400 | 66.6% | 14.9s | 56.9% | 14.9s |
+| 1600 | 67.1% | 17.1s | 59.5% | 17.0s |
+| 1800 | 67.8% | 19.2s | 60.0% | 19.1s |
+| 2000 | 67.5% | 21.4s | 59.8% | 21.1s |
+
+**Conclusion:** Removing positional embeddings costs **−7.7% accuracy** (67.5% → 59.8%) for a negligible 0.3s speed gain. The transformer's self-attention is permutation-invariant — without positional encoding the model cannot distinguish token order, producing near-gibberish output. Positional embeddings are **essential even at context_size=8**. The 2,048 parameter saving is not worth the accuracy collapse. **Do not remove pos_embed.**
+
+## Ablation Summary
+
+All experiments run on T4 GPU (warm start, 2000 steps). Baseline: TinyTransformer.py 2-layer, float16, ReLU, learned pos_embed (~21s warm).
+
+| Change | Accuracy Δ | Speed Δ | Verdict |
+|---|---:|---:|---|
+| bfloat16 (T4) | +0.2% | −4.2× slower | ❌ T4 has no bf16 tensor cores |
+| Weight tying | −3.0% | neutral | ❌ Init mismatch, small vocab |
+| GELU activation | neutral | −14% slower | ❌ erf() overhead on T4 |
+| Remove pos_embed | −7.7% | negligible | ❌ Permutation invariance breaks model |
+| Flash Attention | TBD | TBD | ⏳ Next experiment |
 
 ## Generated Samples
 
