@@ -11,6 +11,7 @@ This file tracks training accuracy for language model experiments run on Google 
   - [torch.compile Cold vs Warm Run](#torchcompile-cold-vs-warm-run-tinytransformer-2-layers-context_size8)
   - [Layer Depth Comparison (2 vs 4 layers)](#tinytransformer-layer-depth-comparison-2-vs-4-layers)
   - [Context Size Comparison](#tinytransformer-context-size-accuracy-comparison)
+  - [bfloat16 vs float16 on T4](#bfloat16-vs-float16-on-t4)
 - [Generated Samples](#generated-samples)
 
 ## Runtime Environment
@@ -62,6 +63,7 @@ This file tracks training accuracy for language model experiments run on Google 
 | TinyTransformerClass.py (1,614,400 params) | 68.1% | 2000 | 19.3s |
 | microgpt_lite.py | 79.4% | 3500 | 202.0s |
 | LlamaLite (`context_size=32`, 1.59M params) | 66.4% | 1800 | 62.7s |
+| TinyTransformer.py (bfloat16, T4) | 68.6% | 2000 | 82.0s |
 
 ## Transformer Experiment Notes
 
@@ -139,6 +141,24 @@ Quick comparison:
 
 - Best accuracy: `67.4%` (`context_size=8`) vs `68.5%` (`context_size=64`) -> `+1.1` points.
 - Training time: `25.4s` (`context_size=8`) vs `197.5s` (`context_size=64`) -> about `7.8x` slower at `context_size=64`.
+
+### bfloat16 vs float16 on T4
+
+| Step | Accuracy (bfloat16) | Time (bfloat16) |
+|---:|---:|---:|
+| 0 | 19.3% | 0.2s |
+| 200 | 55.3% | 8.4s |
+| 400 | 58.5% | 16.5s |
+| 600 | 61.1% | 24.8s |
+| 800 | 64.4% | 33.1s |
+| 1000 | 65.8% | 41.3s |
+| 1200 | 66.0% | 49.5s |
+| 1400 | 66.6% | 57.6s |
+| 1600 | 67.2% | 65.7s |
+| 1800 | 68.2% | 73.9s |
+| 2000 | 68.6% | 82.0s |
+
+**Conclusion:** bfloat16 is **~4.2× slower** than float16 on the T4 GPU (82.0s vs ~19.7s warm). The T4 (Turing architecture) has no native bfloat16 tensor cores — it falls back to float32 compute internally, losing all speed benefit. bfloat16 is only advantageous on Ampere (A100) or Hopper (H100) GPUs. **Use float16 on T4.**
 
 ## Generated Samples
 
