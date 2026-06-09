@@ -44,10 +44,7 @@ This file tracks training accuracy for language model experiments run on Google 
 | NameSLP.py | 39.6% | 2000 | 35.1s |
 | TinyMLP.py | 59.4% | 2000 | 3.9s |
 | TorchMLP.py | 62.4% | 2000 | 3.6s |
-| TinyTransformer.py (2 layers, 1,614,400 params) | 67.7% | 1800 | 21.1s |
-| TinyTransformer.py (`context_size=8`, prev run) | 67.4% | 1600 | 25.4s |
-| TinyTransformer.py (`context_size=8`, cold run) | 67.9% | 2000 | 46.3s |
-| TinyTransformer.py (`context_size=8`, warm run) | 68.4% | 2000 | 19.7s |
+| TinyTransformer.py (2 layers, 1,614,400 params) | 68.4% | 2000 | 19.7s |
 | TinyTransformer.py (`context_size=64`) | 68.5% | 1800 | 197.5s |
 | TinyTransformer.py (4 layers, 3,193,920 params) | 73.1% | 3400 | 79.9s |
 | TinyTransformerClass.py (1,614,400 params) | 68.1% | 2000 | 19.3s |
