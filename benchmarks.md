@@ -61,19 +61,19 @@ This file tracks training accuracy for language model experiments run on Google 
 
 ### torch.compile Cold vs Warm Run (TinyTransformer, 2 layers, context_size=8)
 
-| Step | Cold Run Acc | Cold Run Time | Warm Run Acc | Warm Run Time |
-|---:|---:|---:|---:|---:|
-| 0 | 19.3% | 27.2s | 19.1% | 0.0s |
-| 200 | 54.8% | 29.1s | 54.6% | 2.1s |
-| 400 | 58.7% | 31.0s | 59.0% | 4.0s |
-| 600 | 60.6% | 32.9s | 60.4% | 5.9s |
-| 800 | 62.6% | 34.8s | 63.5% | 7.9s |
-| 1000 | 65.5% | 36.7s | 65.6% | 9.8s |
-| 1200 | 65.3% | 38.6s | 65.9% | 11.8s |
-| 1400 | 66.8% | 40.5s | 67.5% | 13.8s |
-| 1600 | 67.3% | 42.4s | 67.3% | 15.7s |
-| 1800 | 67.3% | 44.4s | 67.6% | 17.7s |
-| 2000 | 67.9% | 46.3s | 68.4% | 19.7s |
+| Step | Accuracy | Cold Time | Warm Time |
+|---:|---:|---:|---:|
+| 0 | 19.3% | 27.2s | 0.0s |
+| 200 | 54.8% | 29.1s | 2.1s |
+| 400 | 58.7% | 31.0s | 4.0s |
+| 600 | 60.6% | 32.9s | 5.9s |
+| 800 | 62.6% | 34.8s | 7.9s |
+| 1000 | 65.5% | 36.7s | 9.8s |
+| 1200 | 65.3% | 38.6s | 11.8s |
+| 1400 | 66.8% | 40.5s | 13.8s |
+| 1600 | 67.3% | 42.4s | 15.7s |
+| 1800 | 67.3% | 44.4s | 17.7s |
+| 2000 | 67.9% | 46.3s | 19.7s |
 
 The ~26s cold-start overhead is entirely front-loaded at Step 0 (27.2s vs 0.0s). Per-step speed is identical (~1.9s/200 steps) in both runs. The Inductor kernel cache persists between runs within the same session (or to disk via `TORCHINDUCTOR_FX_GRAPH_CACHE=1`).
 
