@@ -32,7 +32,7 @@ The code is intentionally short so you can read end-to-end training and sampling
 |------|-------------|
 | [README.md](README.md) | Project overview, model summaries, requirements, and roadmap |
 | [LICENSE](LICENSE) | Repository license |
-| [benchmarks.md](benchmarks.md) | Training snapshots and generated sample comparisons |
+| [BENCHMARKS.md](BENCHMARKS.md) | Training snapshots and generated sample comparisons |
 | [TODO.md](TODO.md) | Task list and planned follow-ups |
 | [NameSLP.py](NameSLP.py) | NumPy single-layer perceptron trained on character windows from the names dataset |
 | [names_dataset.py](names_dataset.py) | Karpathy names data loader with character encoding and one-hot context features |
@@ -131,7 +131,7 @@ Hardware notes:
 
 ## Benchmarks
 
-Training accuracy snapshots and generated sample comparisons are tracked in [benchmarks.md](benchmarks.md).
+Training accuracy snapshots and generated sample comparisons are tracked in [BENCHMARKS.md](BENCHMARKS.md).
 
 ## Dataset
 
