@@ -2,6 +2,17 @@
 
 This file tracks training accuracy for language model experiments run on Google Colab.
 
+## Contents
+
+- [Runtime Environment](#runtime-environment)
+- [Accuracy Comparison](#accuracy-comparison)
+- [Summary Comparison](#summary-comparison)
+- [Transformer Experiment Notes](#transformer-experiment-notes)
+  - [torch.compile Cold vs Warm Run](#torchcompile-cold-vs-warm-run-tinytransformer-2-layers-context_size8)
+  - [Layer Depth Comparison (2 vs 4 layers)](#tinytransformer-layer-depth-comparison-2-vs-4-layers)
+  - [Context Size Comparison](#tinytransformer-context-size-accuracy-comparison)
+- [Generated Samples](#generated-samples)
+
 ## Runtime Environment
 
 - Platform: Google Colab
