@@ -47,15 +47,18 @@ Canonical model results — best configuration per architecture.
 
 ## Ablation Summary
 
-Single-change experiments on TinyTransformer.py baseline (~68% accuracy, ~21s warm). All run on T4 GPU, 2000 steps warm start.
+All experiments are single-change ablations on TinyTransformer.py (2-layer baseline, ~68% accuracy, ~21s warm, T4 GPU).
 
 | Change | Accuracy Δ | Speed Δ | Verdict |
 |---|---:|---:|---|
-| float16 → bfloat16 | +0.2% | ~4.2× slower | ❌ T4 has no native bf16 tensor cores |
-| Weight tying (`linear.weight = tok_embed.weight`) | −3.0% | neutral | ❌ Init mismatch + small vocab |
-| ReLU → GELU activation | neutral | ~14% slower | ❌ `erf()` overhead not offset by compile |
-| Remove `pos_embed` | −7.7% | negligible | ❌ Breaks token order — essential at all context sizes |
-| Flash Attention (`F.scaled_dot_product_attention`) | TBD | TBD | ⏳ Next experiment |
+| `torch.compile` cold → warm | neutral | ~2.3× faster | ✅ Always use warm times for benchmarking |
+| `n_layers` 2 → 4 | +1.2% | 2.2× slower | ✅ Worth it with more steps (73.1% at 3400) |
+| `context_size` 8 → 64 | +1.1% | 7.8× slower | ⚠️ Poor tradeoff until Flash Attention |
+| float16 → bfloat16 | +0.2% | 4.2× slower | ❌ T4 has no native bf16 tensor cores |
+| Weight tying | −3.0% | neutral | ❌ Init mismatch + small vocab |
+| ReLU → GELU | neutral | 14% slower | ❌ `erf()` overhead not offset by compile |
+| Remove `pos_embed` | −7.7% | negligible | ❌ Breaks permutation invariance |
+| Flash Attention | TBD | TBD | ⏳ Next experiment |
 
 ## Step-by-Step Accuracy
 
