@@ -13,6 +13,7 @@ This file tracks training accuracy for language model experiments run on Google 
   - [Context Size Comparison](#tinytransformer-context-size-accuracy-comparison)
   - [bfloat16 vs float16 on T4](#bfloat16-vs-float16-on-t4)
   - [Weight Tying Experiment](#weight-tying-experiment)
+  - [GELU vs ReLU Activation](#gelu-vs-relu-activation)
 - [Generated Samples](#generated-samples)
 
 ## Runtime Environment
@@ -67,6 +68,7 @@ This file tracks training accuracy for language model experiments run on Google 
 | LlamaLite (`context_size=32`, 1.59M params) | 66.4% | 1800 | 62.7s |
 | TinyTransformer.py (bfloat16, T4) | 68.6% | 2000 | 82.0s |
 | TinyTransformer.py (weight tying) | 65.2% | 2000 | 27.2s |
+| TinyTransformer.py (GELU activation) | 68.1% | 2000 | 23.9s |
 
 ## Transformer Experiment Notes
 
@@ -190,6 +192,28 @@ Training time: `27.3s` (baseline) vs `27.2s` (weight tied) — neutral speed as 
 3. **Double-counting risk:** Passing both `tok_embed.parameters()` and `linear.parameters()` to the optimizer when weights are tied may double-count gradients. Use a deduplication step or pass only `tok_embed` parameters for the shared weight.
 
 **Do not use weight tying on small character-level vocabularies.**
+
+### GELU vs ReLU Activation
+
+Change: `activation='gelu'` added to `nn.TransformerEncoderLayer` (1 argument, default is `'relu'`).
+
+| Step | Accuracy (ReLU, baseline) | Time (ReLU) | Accuracy (GELU) | Time (GELU) |
+|---:|---:|---:|---:|---:|
+| 0 | 19.3% | 0.0s | 19.2% | 0.0s |
+| 200 | 54.7% | 2.1s | 53.4% | 2.4s |
+| 400 | 59.3% | 4.2s | 58.1% | 4.8s |
+| 600 | 60.4% | 6.3s | 60.7% | 7.1s |
+| 800 | 64.8% | 8.3s | 63.8% | 9.5s |
+| 1000 | 64.8% | 10.4s | 65.5% | 11.9s |
+| 1200 | 66.1% | 12.5s | 65.3% | 14.3s |
+| 1400 | 66.6% | 14.6s | 66.4% | 16.7s |
+| 1600 | 67.0% | 16.8s | 67.0% | 19.1s |
+| 1800 | 67.2% | 18.9s | 67.2% | 21.5s |
+| 2000 | 68.1% | 21.0s | 68.1% | 23.9s |
+
+Run 3 times (warm). Baseline per-step: ~2.1s/200 steps. GELU per-step: ~2.4s/200 steps.
+
+**Conclusion:** GELU is **consistently ~14% slower** per step than ReLU on the T4, with **identical final accuracy** (68.1%). GELU's smoother gradient curve provides no benefit at this scale. The slowdown is because GELU involves an `erf()` computation vs ReLU's simple threshold — `torch.compile` cannot fully eliminate this overhead at small batch/context sizes. **Do not use GELU on T4 — keep default ReLU.**
 
 ## Generated Samples
 
