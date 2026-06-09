@@ -12,6 +12,7 @@ This file tracks training accuracy for language model experiments run on Google 
   - [Layer Depth Comparison (2 vs 4 layers)](#tinytransformer-layer-depth-comparison-2-vs-4-layers)
   - [Context Size Comparison](#tinytransformer-context-size-accuracy-comparison)
   - [bfloat16 vs float16 on T4](#bfloat16-vs-float16-on-t4)
+  - [Weight Tying Experiment](#weight-tying-experiment)
 - [Generated Samples](#generated-samples)
 
 ## Runtime Environment
@@ -58,12 +59,14 @@ This file tracks training accuracy for language model experiments run on Google 
 | TorchMLP.py | 62.4% | 2000 | 3.6s |
 | TinyTransformer.py (2 layers, cold start) | 67.9% | 2000 | 46.3s |
 | TinyTransformer.py (2 layers, warm start) | 68.4% | 2000 | 19.7s |
+| TinyTransformer.py (2 layers, warm start, slower T4) | 68.2% | 2000 | 27.3s |
 | TinyTransformer.py (`context_size=64`) | 68.5% | 1800 | 197.5s |
 | TinyTransformer.py (4 layers, 3,193,920 params) | 73.1% | 3400 | 79.9s |
 | TinyTransformerClass.py (1,614,400 params) | 68.1% | 2000 | 19.3s |
 | microgpt_lite.py | 79.4% | 3500 | 202.0s |
 | LlamaLite (`context_size=32`, 1.59M params) | 66.4% | 1800 | 62.7s |
 | TinyTransformer.py (bfloat16, T4) | 68.6% | 2000 | 82.0s |
+| TinyTransformer.py (weight tying) | 65.2% | 2000 | 27.2s |
 
 ## Transformer Experiment Notes
 
@@ -72,6 +75,7 @@ This file tracks training accuracy for language model experiments run on Google 
 - First cold run of 4-layer model was 71.9s due to Colab initialisation overhead; warm runs settle at ~41.4s.
 - Running 4 layers to 3500 steps (79.9s) reaches 73.1%, closing the gap with µGPT (79.4%) at a fraction of the training time (202.0s).
 - `torch.compile` causes a ~26s cold-start overhead on the first run (46.3s total) as PyTorch's Inductor compiles and caches CUDA kernels. Subsequent warm runs reuse the compiled kernel cache and run at 19.7s — the true steady-state training speed.
+- **T4 session variance:** Colab assigns T4s from a shared pool. Warm run times can vary from ~19.7s to ~27.3s (per-step ~1.9s vs ~2.7s) depending on which physical GPU is assigned. Always run at least twice and note session conditions when benchmarking.
 
 ### torch.compile Cold vs Warm Run (TinyTransformer, 2 layers, context_size=8)
 
@@ -159,6 +163,33 @@ Quick comparison:
 | 2000 | 68.6% | 82.0s |
 
 **Conclusion:** bfloat16 is **~4.2× slower** than float16 on the T4 GPU (82.0s vs ~19.7s warm). The T4 (Turing architecture) has no native bfloat16 tensor cores — it falls back to float32 compute internally, losing all speed benefit. bfloat16 is only advantageous on Ampere (A100) or Hopper (H100) GPUs. **Use float16 on T4.**
+
+### Weight Tying Experiment
+
+Adding `linear.weight = tok_embed.weight` ties the output projection to the token embedding matrix.
+
+| Step | Accuracy (baseline) | Accuracy (weight tied) |
+|---:|---:|---:|
+| 0 | 19.3% | 1.9% |
+| 200 | 55.5% | 41.5% |
+| 400 | 59.6% | 47.8% |
+| 600 | 60.3% | 51.4% |
+| 800 | 64.1% | 57.1% |
+| 1000 | 66.1% | 60.0% |
+| 1200 | 65.4% | 61.0% |
+| 1400 | 67.5% | 62.6% |
+| 1600 | 66.8% | 63.7% |
+| 1800 | 68.4% | 65.2% |
+| 2000 | 68.2% | 65.2% |
+
+Training time: `27.3s` (baseline) vs `27.2s` (weight tied) — neutral speed as expected.
+
+**Conclusion:** Weight tying is **net negative** on this model (−3% accuracy). Two causes identified:
+1. **Initialisation mismatch:** `nn.Linear` uses Kaiming uniform init; `nn.Embedding` uses standard normal. Tying forces the linear layer to use the embedding's smaller-magnitude weights, causing the initial loss to explode to 256 (vs ~4.7 baseline).
+2. **Small vocab:** Weight tying is most beneficial on large-vocab models (e.g. GPT-2 with 50K tokens) where the shared matrix saves significant parameters and improves gradient signal. On a ~65-char vocab the benefit is negligible and the initialisation harm dominates.
+3. **Double-counting risk:** Passing both `tok_embed.parameters()` and `linear.parameters()` to the optimizer when weights are tied may double-count gradients. Use a deduplication step or pass only `tok_embed` parameters for the shared weight.
+
+**Do not use weight tying on small character-level vocabularies.**
 
 ## Generated Samples
 
