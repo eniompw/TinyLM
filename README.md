@@ -6,7 +6,7 @@ TinyLM is a small character-level language modeling playground.
 >
 > This series continues with [MicroGPT](https://github.com/eniompw/MicroGPT), where the character-level model is scaled up to a decoder-only transformer.
 
-It contains six compact implementations that train character-level models and generate text autoregressively:
+It contains seven compact implementations that train character-level models and generate text autoregressively:
 
 - a NumPy single-layer perceptron baseline for names generation
 - a CuPy character MLP with learned embeddings
@@ -38,12 +38,13 @@ The code is intentionally short so you can read end-to-end training and sampling
 | [NameSLP.py](NameSLP.py) | NumPy single-layer perceptron trained on character windows from the names dataset |
 | [names_dataset.py](names_dataset.py) | Karpathy names data loader with character encoding and one-hot context features |
 | [TinyMLP.py](TinyMLP.py) | CuPy character MLP with a learned embedding table and one hidden layer |
-| [tinystories_dataset.py](tinystories_dataset.py) | Shared TinyStories data loader and character-level preprocessing utility |
-| [TinyMLP.ipynb](TinyMLP.ipynb) | Notebook version of the CuPy model |
 | [TinyMLP-explained.md](TinyMLP-explained.md) | Walkthrough of `TinyMLP.py` including data flow, tensor shapes, and manual gradient steps |
+| [tinystories_dataset.py](tinystories_dataset.py) | Shared TinyStories data loader and character-level preprocessing utility |
 | [TorchMLP.py](TorchMLP.py) | PyTorch equivalent of `TinyMLP.py` using autograd and the same core architecture |
+| [TorchMLP.ipynb](TorchMLP.ipynb) | Notebook version of `TorchMLP.py` |
 | [SimpleTransformer.py](SimpleTransformer.py) | Simplified PyTorch transformer — same structure as `TorchMLP.py` but with token + positional embeddings and a 2-layer transformer encoder |
 | [SimpleTransformer.ipynb](SimpleTransformer.ipynb) | Notebook version of `SimpleTransformer.py` |
+| [SimpleTransformer-explained.md](SimpleTransformer-explained.md) | Walkthrough of `SimpleTransformer.py` including architecture choices and the bridge from MLP to full transformer |
 | [TinyTransformer.py](TinyTransformer.py) | PyTorch character-level transformer encoder with token + positional embeddings, mixed precision, and autoregressive sampling |
 | [TinyTransformer-explained.md](TinyTransformer-explained.md) | Walkthrough of `TinyTransformer.py` including architecture choices, training flow, and speed/quality optimization notes |
 | [TinyTransformerClass.py](TinyTransformerClass.py) | OOP refactor of `TinyTransformer.py` wrapping the model in an `nn.Module` class with a `get_batch()` helper function |
