@@ -71,30 +71,69 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 
 ---
 
-## 📈 Step-by-Step Accuracy Graph Data
+## 📈 Step-by-Step Accuracy Data
 
-Want to graph our progress? Here is the accuracy of each model at different points in training. *(Blank cells mean we stopped training that model early).*
+*To make this data easier to read without scrolling sideways, we split it into three mini-tables based on the "story" of the experiments. ⭐ marks the peak accuracy. 📉 shows where the model starts overfitting and getting worse!*
 
-*Teacher Note: Look at the 2200 step mark. You'll see many models "peak" here and then start to drop. This means the model has learned all it can, and continuing to train actually makes it worse (overfitting)!*
+**Legend:** 
+* **2L/3L/4L** = TinyTransformer with 2, 3, or 4 layers.
+* **ND** = Narrow-Deep (skinnier model, more layers).
+* **FFN** = Feed-Forward Network (the "thinking" part of the layer).
 
-| Step | NameSLP | TinyMLP | SimpleTrans | **TinyTrans (2L)** | TinyTrans (3L) Run 1 | TinyTrans (3L) Run 2 | TinyTrans (4L) | Narrow-Deep 4L | Efficient-Deep 4L | Balanced ND 4L | Wider FFN 3L | High LR 3L | Middle Ground 3L | Large Batch+LR 3L | microgpt |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 0 | 3.5% | 4.7% | 4.0% | 19.3% | 19.3% | 19.3% | 19.3% | 10.6% | 5.2% | 19.3% | 20.2% | 19.3% | 19.3% | 19.3% | 1.7% |
-| 200 | 37.1% | 44.8% | 53.5% | 54.8% | 55.8% | 56.1% | 56.8% | 54.3% | 55.1% | 56.6% | 55.4% | 55.3% | 57.5% | 58.0% | 53.6% |
-| 400 | 38.2% | 48.9% | 58.6% | 58.3% | 59.7% | 59.8% | 60.7% | 58.7% | 60.7% | 60.7% | 59.9% | 58.3% | 60.2% | 60.8% | 65.2% |
-| 800 | 38.9% | 55.0% | 62.4% | 63.2% | 64.8% | 64.6% | 64.6% | 63.0% | 63.9% | 65.6% | 64.7% | 62.9% | 65.5% | 66.9% | 71.4% |
-| 1200 | 39.2% | 56.7% | 64.7% | 65.5% | 66.6% | 66.2% | 66.6% | 66.0% | 67.1% | 67.1% | 67.4% | 64.5% | 67.2% | 68.6% | 73.3% |
-| 1600 | 39.5% | 58.3% | 66.2% | 67.0% | 67.6% | 67.4% | 68.0% | 67.8% | 68.4% | 70.0% | 70.2% | 66.2% | 69.9% | 71.0% | 76.0% |
-| 2000 | 39.6% | 59.4% | 67.2% | 67.4% | 70.2% | 68.8% | 68.9% | 69.4% | **70.8%** ⭐ | 70.5% | 71.1% | 68.8% | 70.8% | 72.3% | 77.0% |
-| 2200 | - | - | - | - | **73.5%** ⭐ | **72.9%** ⭐ | - | 68.1% | 69.7% | 70.4% | **71.8%** ⭐ | **72.4%** ⭐ | **75.2%** ⭐ | **76.1%** ⭐ | - |
-| 2400 | - | - | - | - | 71.7% | 71.2% | - | 68.9% | - | **70.8%** ⭐ | - | 71.1% | 73.0% | - | - |
-| 2600 | - | - | - | - | - | 70.9% | - | - | - | - | - | 70.6% | - | - | - |
-| 2800 | - | - | - | - | - | 71.5% | - | - | - | - | - | 71.5% | - | - | - |
-| 3000 | - | - | - | - | - | 71.5% | - | - | - | - | - | 70.8% | - | - | - |
-| 3400 | - | - | - | - | - | - | 73.1% | - | - | - | - | - | - | - | - |
-| 3500 | - | - | - | - | - | - | - | - | - | - | - | - | - | - | 79.4% |
+### Table 1: The Baselines (Where we started)
+*Goal: See if our basic Transformer architecture beats the older, simpler models.*
 
-*(Note: ⭐ marks the confirmed peak for each model. Notice how most models hit their peak around step 2200 and then plateau or drop. This means leaving them training longer is just a waste of electricity!)*
+| Step | NameSLP | TinyMLP | SimpleTrans | **2L (Baseline)** | microgpt |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 3.5% | 4.7% | 4.0% | 19.3% | 1.7% |
+| 200 | 37.1% | 44.8% | 53.5% | 54.8% | 53.6% |
+| 400 | 38.2% | 48.9% | 58.6% | 58.3% | 65.2% |
+| 800 | 38.9% | 55.0% | 62.4% | 63.2% | 71.4% |
+| 1200 | 39.2% | 56.7% | 64.7% | 65.5% | 73.3% |
+| 1600 | 39.5% | 58.3% | 66.2% | 67.0% | 76.0% |
+| 2000 | **39.6%** ⭐ | **59.4%** ⭐ | **67.2%** ⭐ | 67.4% | 77.0% |
+| 2200 | - | - | - | - | - |
+| 2400+ | - | - | - | - | **79.4%** ⭐ (at 3500) |
+
+### Table 2: Shape & Size Tests (Does depth or width matter more?)
+*Goal: Find out if adding layers, widening the brain, or changing the shape gives us better accuracy than the 2L Baseline.*
+
+| Step | **3L** (Run 1) | **3L** (Run 2) | **4L** | ND 4L (128d) | Eff. Deep 4L | Bal. ND 4L (192d) | Wider FFN 3L |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 19.3% | 19.3% | 19.3% | 10.6% | 5.2% | 19.3% | 20.2% |
+| 200 | 55.8% | 56.1% | 56.8% | 54.3% | 55.1% | 56.6% | 55.4% |
+| 400 | 59.7% | 59.8% | 60.7% | 58.7% | 60.7% | 60.7% | 59.9% |
+| 800 | 64.8% | 64.6% | 64.6% | 63.0% | 63.9% | 65.6% | 64.7% |
+| 1200 | 66.6% | 66.2% | 66.6% | 66.0% | 67.1% | 67.1% | 67.4% |
+| 1600 | 67.6% | 67.4% | 68.0% | 67.8% | 68.4% | 70.0% | 70.2% |
+| 2000 | 70.2% | 68.8% | 68.9% | 69.4% | **70.8%** ⭐ | 70.5% | 71.1% |
+| 2200 | **73.5%** ⭐ | **72.9%** ⭐ | - | 68.1% 📉 | 69.7% 📉 | 70.4% | **71.8%** ⭐ |
+| 2400 | 71.7% 📉 | 71.2% 📉 | - | 68.9% | - | **70.8%** ⭐ | - |
+| 2600 | - | 70.9% 📉 | - | - | - | - | - |
+| 2800 | - | 71.5% | - | - | - | - | - |
+| 3000 | - | 71.5% | - | - | - | - | - |
+| 3400 | - | - | **73.1%** ⭐ | - | - | - | - |
+
+### Table 3: The Champions (Batch Size & Learning Rate Tests)
+*Goal: Instead of changing the model's shape, what if we just change HOW it learns? (Using the 3-Layer model).*
+
+| Step | High LR (batch=1024) | Mid Ground (batch=1536) | **Large Batch+LR** (batch=2048) |
+| ---: | ---: | ---: | ---: |
+| 0 | 19.3% | 19.3% | 19.3% |
+| 200 | 55.3% | 57.5% | 58.0% |
+| 400 | 58.3% | 60.2% | 60.8% |
+| 800 | 62.9% | 65.5% | 66.9% |
+| 1200 | 64.5% | 67.2% | 68.6% |
+| 1600 | 66.2% | 69.9% | 71.0% |
+| 2000 | 68.8% | 70.8% | 72.3% |
+| 2200 | **72.4%** ⭐ | **75.2%** ⭐ | **76.1%** ⭐ |
+| 2400 | 71.1% 📉 | 73.0% 📉 | - |
+| 2600 | 70.6% 📉 | - | - |
+| 2800 | 71.5% | - | - |
+| 3000 | 70.8% 📉 | - | - |
+
+**📊 How to read this data like a Pro:**
+Look at the 3-Layer model in Table 2. It hits 73.5% at step 2200, but drops to 71.7% at step 2400. This is called **overfitting**. The model has memorized the training data so hard that it's actually getting worse at writing new stories. Always stop training when you hit the ⭐!
 
 ---
 
