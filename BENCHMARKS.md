@@ -18,6 +18,7 @@ This file tracks training experiments on character-level language models trained
   - [Weight Tying](#weight-tying)
   - [GELU vs ReLU Activation](#gelu-vs-relu-activation)
   - [Positional Embedding Ablation](#positional-embedding-ablation)
+  - [Full-Sequence Causal Loss](#full-sequence-causal-loss)
   - [SimpleTransformer.py](#simpletransformerpy)
 - [Generated Samples](#generated-samples)
 
@@ -60,34 +61,34 @@ All experiments are single-change ablations on TinyTransformer.py (2-layer basel
 | Weight tying | −3.0% | neutral | ❌ Init mismatch + small vocab |
 | ReLU → GELU | neutral | 14% slower | ❌ `erf()` overhead not offset by compile |
 | Remove `pos_embed` | −7.7% | negligible | ❌ Breaks permutation invariance |
-| TinyTransformer → SimpleTransformer (remove autocast, AdamW→Adam, embed_dim 256→128, num_stories 1000→200) | −0.5% | ~1.7× slower | ⚠️ Simpler code, lower capacity — use for teaching |
+| Last-pos loss → full-sequence causal loss | neutral (long run) | 1.47× slower | ⚠️ Faster early learning, same ceiling, standard for decoder training |
 | Flash Attention | TBD | TBD | ⏳ Next experiment |
 
 ## Step-by-Step Accuracy
 
-**Key:** TT = TinyTransformer.py, TTC = TinyTransformerClass.py, µGPT = microgpt_lite.py, ST = SimpleTransformer.py
+**Key:** TT = TinyTransformer.py, TTC = TinyTransformerClass.py, µGPT = microgpt_lite.py, ST = SimpleTransformer.py, TT-FSL = TinyTransformer.py (full-sequence causal loss)
 
-| Epoch | NameSLP.py | TinyMLP.py | TorchMLP.py | ST | TT (2 layers) | TTC | µGPT | LlamaLite | TT (4 layers) |
-|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 0 | 3.5% | 4.7% | 21.4% | 4.0% | 19.3% | 19.3% | 1.7% | 19.6% | 19.3% |
-| 200 | 37.1% | 44.8% | 54.3% | 53.5% | 54.8% | 54.7% | 53.6% | 47.3% | 56.8% |
-| 400 | 38.2% | 48.9% | 58.0% | 58.6% | 58.3% | 58.7% | 65.2% | 53.7% | 60.7% |
-| 600 | 38.6% | 52.3% | 59.1% | 60.6% | 60.4% | 60.6% | 68.6% | 57.1% | 62.1% |
-| 800 | 38.9% | 55.0% | 59.9% | 62.4% | 63.2% | 63.9% | 71.4% | 58.3% | 64.6% |
-| 1000 | 39.1% | 56.4% | 60.8% | 63.5% | 65.4% | 65.1% | 71.9% | 60.9% | 65.9% |
-| 1200 | 39.2% | 56.7% | 61.4% | 64.7% | 65.5% | 64.9% | 73.3% | 62.6% | 66.6% |
-| 1400 | 39.4% | 58.2% | 60.8% | 65.5% | 66.0% | 66.8% | 74.6% | 63.0% | 67.6% |
-| 1600 | 39.5% | 58.3% | 61.8% | 66.2% | 67.0% | 66.8% | 76.0% | 64.1% | 68.0% |
-| 1800 | 39.5% | 59.2% | 61.1% | 66.5% | 67.7% | 67.8% | 75.9% | 66.4% | 69.0% |
-| 2000 | 39.6% | 59.4% | 62.4% | 67.2% | 67.4% | 68.1% | 77.0% | 65.6% | 68.9% |
-| 2200 | - | - | - | - | - | - | - | - | 72.8% |
-| 2400 | - | - | - | - | - | - | - | - | 71.6% |
-| 2600 | - | - | - | - | - | - | - | - | 70.6% |
-| 2800 | - | - | - | - | - | - | - | - | 72.0% |
-| 3000 | - | - | - | - | - | - | - | - | 72.0% |
-| 3200 | - | - | - | - | - | - | - | - | 72.5% |
-| 3400 | - | - | - | - | - | - | - | - | 73.1% |
-| 3500 | - | - | - | - | - | - | 79.4% | - | - |
+| Epoch | NameSLP.py | TinyMLP.py | TorchMLP.py | ST | TT (2 layers) | TTC | µGPT | LlamaLite | TT (4 layers) | TT-FSL |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0 | 3.5% | 4.7% | 21.4% | 4.0% | 19.3% | 19.3% | 1.7% | 19.6% | 19.3% | 20.4% |
+| 200 | 37.1% | 44.8% | 54.3% | 53.5% | 54.8% | 54.7% | 53.6% | 47.3% | 56.8% | 55.9% |
+| 400 | 38.2% | 48.9% | 58.0% | 58.6% | 58.3% | 58.7% | 65.2% | 53.7% | 60.7% | 59.4% |
+| 600 | 38.6% | 52.3% | 59.1% | 60.6% | 60.4% | 60.6% | 68.6% | 57.1% | 62.1% | 62.3% |
+| 800 | 38.9% | 55.0% | 59.9% | 62.4% | 63.2% | 63.9% | 71.4% | 58.3% | 64.6% | 64.4% |
+| 1000 | 39.1% | 56.4% | 60.8% | 63.5% | 65.4% | 65.1% | 71.9% | 60.9% | 65.9% | 65.5% |
+| 1200 | 39.2% | 56.7% | 61.4% | 64.7% | 65.5% | 64.9% | 73.3% | 62.6% | 66.6% | 67.0% |
+| 1400 | 39.4% | 58.2% | 60.8% | 65.5% | 66.0% | 66.8% | 74.6% | 63.0% | 67.6% | 66.4% |
+| 1600 | 39.5% | 58.3% | 61.8% | 66.2% | 67.0% | 66.8% | 76.0% | 64.1% | 68.0% | 66.6% |
+| 1800 | 39.5% | 59.2% | 61.1% | 66.5% | 67.7% | 67.8% | 75.9% | 66.4% | 69.0% | 67.5% |
+| 2000 | 39.6% | 59.4% | 62.4% | 67.2% | 67.4% | 68.1% | 77.0% | 65.6% | 68.9% | 67.6% |
+| 2200 | - | - | - | - | - | - | - | - | 72.8% | - |
+| 2400 | - | - | - | - | - | - | - | - | 71.6% | - |
+| 2600 | - | - | - | - | - | - | - | - | 70.6% | - |
+| 2800 | - | - | - | - | - | - | - | - | 72.0% | - |
+| 3000 | - | - | - | - | - | - | - | - | 72.0% | - |
+| 3200 | - | - | - | - | - | - | - | - | 72.5% | - |
+| 3400 | - | - | - | - | - | - | - | - | 73.1% | - |
+| 3500 | - | - | - | - | - | - | 79.4% | - | - | - |
 
 ## Experiment Details
 
@@ -241,6 +242,38 @@ Training time: `21.4s` (with) vs `21.1s` (without) — negligible difference.
 
 **Conclusion:** Removing positional embeddings costs **−7.7% accuracy** for 0.3s saved. Transformer self-attention is permutation-invariant — without positional encoding the model cannot distinguish token order, producing near-gibberish output. **Positional embeddings are essential even at `context_size=8`.**
 
+### Full-Sequence Causal Loss
+
+**Change:** Added a causal mask (`nn.Transformer.generate_square_subsequent_mask`) and reshaped the loss over all 8 positions instead of only the final one. Each training step now produces 8× more (input, target) pairs. Accuracy is still evaluated **only at the last position** for a direct comparison.
+
+Key code changes:
+- `sequences = torch.cat([input_ids, target_ids.unsqueeze(1)], dim=1)` — combine inputs and targets into length-9 sequences
+- `causal_mask = nn.Transformer.generate_square_subsequent_mask(context_size)` — prevent future token leakage
+- `loss = F.cross_entropy(logits.reshape(-1, vocab_size), batch_y.reshape(-1))` — loss over all 8 positions
+
+| Step | Baseline (last-pos loss) | Full-seq causal loss | Δ Acc |
+|---:|---:|---:|---:|
+| 0 | 12.8% | 20.4% | +7.6% |
+| 200 | 52.2% | 55.9% | +3.7% |
+| 400 | 58.1% | 59.4% | +1.3% |
+| 600 | 61.2% | 62.3% | +1.1% |
+| 800 | 62.7% | 64.4% | +1.7% |
+| 1000 | 64.8% | 65.5% | +0.7% |
+| 1200 | 65.6% | 67.0% | +1.4% |
+| 1400 | 66.1% | 66.4% | +0.3% |
+| 1600 | 67.2% | 66.6% | −0.6% |
+| 1800 | 67.6% | 67.5% | −0.1% |
+| 2000 | 68.2% | 67.6% | −0.6% |
+
+Training time: `20.2s` (baseline) vs `29.6s` (full-seq) — **1.47× slower**.
+
+**Conclusion:**
+- **Faster early learning:** Full-sequence loss reaches 55.9% at step 200 vs 52.2% baseline (+3.7%), driven by 8× more gradient signal per batch.
+- **Same accuracy ceiling:** Both variants plateau near 67–68% by step 1800. The bottleneck is model capacity (2-layer encoder, 256-dim, 8-char context), not training signal density.
+- **Time cost:** +47% wall-clock time per run. The baseline is slightly more *time-efficient* at this scale (68.2% in 20.2s vs 67.6% in 29.6s).
+- **Causal mask correctness:** Without the mask, the encoder can attend to future tokens during training, making the loss artificially low and generation inconsistent with training. The mask is required for correctness, not just performance.
+- **Standard practice:** Full-sequence causal loss is the standard approach in GPT-style decoder training (used in `TinyLlama.py`). At larger model sizes and longer runs, the sample-efficiency advantage compounds; the ceiling effect seen here is a small-model artifact.
+
 ### SimpleTransformer.py
 
 **Change:** Simplified version of TinyTransformer.py — removes `autocast`, `CosineAnnealingLR`, `AdamW`→`Adam`, `embed_dim` 256→128, `ffn_dim` 1024→256, `num_stories` 1000→200, full-dataset eval (OOM-safe at 200 stories).
@@ -310,6 +343,12 @@ Once there was a faster. They learned the pusiade of the yell socked up and play
 
 ```text
 Once there. She wise her bird was family face on on the thought it was so happy and put the tent down and said, "Mom, Tim, and they also much fun. They are red back well. One day, a big boy named Tim.
+```
+
+### TinyTransformer.py (full-sequence causal loss)
+
+```text
+Once there was so happy and not said, "That's too love to the other and broken. She put the tealing is a big and thought it was very happy that is that give under a well. One day, a big box for disparkline.
 ```
 
 ### TinyTransformer.py (4 layers, 3500 steps)
