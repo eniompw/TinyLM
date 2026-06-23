@@ -29,6 +29,7 @@ Every entry below changes **only one thing at a time**. This is the scientific m
 | SimpleTransformer.py | 67.2% | 2000 | 35.6s |
 | **TinyTransformer.py (2 layers)** 🥇 | **68.4%** | **2000** | **19.7s** |
 | TinyTransformer.py (context=64) | 68.5% | 1800 | 197.5s |
+| TinyTransformer.py (Narrow-Deep 4L, 810K params) | 68.9% | 2400 | 68.0s |
 | TinyTransformer.py (3 layers) | 73.5% | 2200 | ~33s |
 | TinyTransformer.py (4 layers) | 73.1% | 3400 | 79.9s |
 | microgpt_lite.py | 79.4% | 3500 | 202.0s |
@@ -52,6 +53,7 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 | **Loss:** Last-word vs Full-sequence | Neutral | 1.47× slower | ⚠️ Learns faster early on, but hits the same ceiling. |
 | **Shape:** Wide/Short → Narrow/Deep | +1.0% | 20% slower | ✅ Depth beats width, even with half the parameters! |
 | **Flash Attention** + Context 32 | +0.2% | 3.2× slower | ⚠️ Proves memory-efficient math works, but model needs to be bigger to use it. |
+| **Narrow-Deep Alt. HPs** (128d, 4L, 810K params) | +0.5% | 3.4× slower | ⚠️ Half the params, competitive accuracy — under-trained, likely has more headroom. |
 
 ---
 
@@ -59,22 +61,22 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 
 Want to graph our progress? Here is the accuracy of each model at different points in training. *(Blank cells mean we stopped training that model early).*
 
-| Step | NameSLP | TinyMLP | SimpleTrans | **TinyTrans (2L)** | TinyTrans (3L) Run 1 | TinyTrans (3L) Run 2 | TinyTrans (4L) | microgpt |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 0 | 3.5% | 4.7% | 4.0% | 19.3% | 19.3% | 19.3% | 19.3% | 1.7% |
-| 200 | 37.1% | 44.8% | 53.5% | 54.8% | 55.8% | 56.1% | 56.8% | 53.6% |
-| 400 | 38.2% | 48.9% | 58.6% | 58.3% | 59.7% | 59.8% | 60.7% | 65.2% |
-| 800 | 38.9% | 55.0% | 62.4% | 63.2% | 64.8% | 64.6% | 64.6% | 71.4% |
-| 1200 | 39.2% | 56.7% | 64.7% | 65.5% | 66.6% | 66.2% | 66.6% | 73.3% |
-| 1600 | 39.5% | 58.3% | 66.2% | 67.0% | 67.6% | 67.4% | 68.0% | 76.0% |
-| 2000 | 39.6% | 59.4% | 67.2% | 67.4% | 70.2% | 68.8% | 68.9% | 77.0% |
-| 2200 | - | - | - | - | **73.5%** ⭐ | **72.9%** ⭐ | - | - |
-| 2400 | - | - | - | - | 71.7% | 71.2% | - | - |
-| 2600 | - | - | - | - | - | 70.9% | - | - |
-| 2800 | - | - | - | - | - | 71.5% | - | - |
-| 3000 | - | - | - | - | - | 71.5% | - | - |
-| 3400 | - | - | - | - | - | - | 73.1% | - |
-| 3500 | - | - | - | - | - | - | - | 79.4% |
+| Step | NameSLP | TinyMLP | SimpleTrans | **TinyTrans (2L)** | TinyTrans (3L) Run 1 | TinyTrans (3L) Run 2 | TinyTrans (4L) | Narrow-Deep 4L | microgpt |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 3.5% | 4.7% | 4.0% | 19.3% | 19.3% | 19.3% | 19.3% | 10.6% | 1.7% |
+| 200 | 37.1% | 44.8% | 53.5% | 54.8% | 55.8% | 56.1% | 56.8% | 54.3% | 53.6% |
+| 400 | 38.2% | 48.9% | 58.6% | 58.3% | 59.7% | 59.8% | 60.7% | 58.7% | 65.2% |
+| 800 | 38.9% | 55.0% | 62.4% | 63.2% | 64.8% | 64.6% | 64.6% | 63.0% | 71.4% |
+| 1200 | 39.2% | 56.7% | 64.7% | 65.5% | 66.6% | 66.2% | 66.6% | 66.0% | 73.3% |
+| 1600 | 39.5% | 58.3% | 66.2% | 67.0% | 67.6% | 67.4% | 68.0% | 67.8% | 76.0% |
+| 2000 | 39.6% | 59.4% | 67.2% | 67.4% | 70.2% | 68.8% | 68.9% | 69.4% | 77.0% |
+| 2200 | - | - | - | - | **73.5%** ⭐ | **72.9%** ⭐ | - | 68.1% | - |
+| 2400 | - | - | - | - | 71.7% | 71.2% | - | 68.9% | - |
+| 2600 | - | - | - | - | - | 70.9% | - | - | - |
+| 2800 | - | - | - | - | - | 71.5% | - | - | - |
+| 3000 | - | - | - | - | - | 71.5% | - | - | - |
+| 3400 | - | - | - | - | - | - | 73.1% | - | - |
+| 3500 | - | - | - | - | - | - | - | - | 79.4% |
 
 *(Note: ⭐ marks the confirmed peak for 3-layer models. Both runs peak at step 2200 then plateau/oscillate — training beyond this step wastes time with no accuracy gain. Simple models plateau very early, while deeper models like 4L keep improving if given more steps.)*
 
@@ -153,6 +155,34 @@ Want to graph our progress? Here is the accuracy of each model at different poin
 **The Experiment:** We turned on Flash Attention (specifically PyTorch's Memory-Efficient SDPA) and bumped the context to 32.
 **Result:** It worked! It proved we can bypass the slow O(T²) math from Experiment #3. However, accuracy only went up 0.2%.
 **The Takeaway:** The memory-efficient math works perfectly, but our model's "brain" (128 dimensions) is now too small to actually use the extra context. The bottleneck is no longer memory; it's model capacity.
+
+### 12. Narrow-Deep Alternative Hyperparameters
+**The Experiment:** A follow-up to Experiment #10. Instead of just halving width and doubling depth, we deliberately tuned all hyperparameters for a narrow-deep shape: `embed_dim=128`, `ffn_dim=512`, `n_heads=4`, `n_layers=4`, keeping `context_size=8`, `batch_size=1024`, `lr=1e-3`.
+
+```
+params: 810,560
+Step    0 | Loss: 4.9636 | Acc: 10.6% | 37.1s
+Step  200 | Loss: 1.4453 | Acc: 54.3% | 39.5s
+Step  400 | Loss: 1.3106 | Acc: 58.7% | 42.1s
+Step  600 | Loss: 1.2775 | Acc: 61.8% | 44.6s
+Step  800 | Loss: 1.1805 | Acc: 63.0% | 47.2s
+Step 1000 | Loss: 1.1456 | Acc: 64.1% | 49.8s
+Step 1200 | Loss: 1.1142 | Acc: 66.0% | 52.4s
+Step 1400 | Loss: 1.0868 | Acc: 65.9% | 55.0s
+Step 1600 | Loss: 1.0473 | Acc: 67.8% | 57.6s
+Step 1800 | Loss: 1.0197 | Acc: 68.8% | 60.2s
+Step 2000 | Loss: 1.0018 | Acc: 69.4% | 62.8s
+Step 2200 | Loss: 0.9960 | Acc: 68.1% | 65.4s
+Step 2400 | Loss: 0.9675 | Acc: 68.9% | 68.0s
+Training time: 68.0s
+```
+
+**Result:** 68.9% accuracy with only **810,560 parameters** — about half the size of the standard 4-layer model. The loss curve is clean and monotonically decreasing throughout. Accuracy oscillates at step 2200 (the same plateau jitter seen in other deep runs) before recovering to 68.9% at step 2400.
+
+**The Takeaway:** This model is likely **under-trained**. The standard 4-layer model needed 3400 steps to peak at 73.1% — this run stopped at 2400. Running to 3400–4000 steps may close the gap significantly. Most importantly: **half the parameters, competitive accuracy** — a compelling demonstration that depth is a more efficient use of a parameter budget than width.
+
+**Generated Sample (68.9% Acc):**
+> `Once there sunsy and her mom said, "Yes, Tom, you make a shiny back to the story is hurt you!" Max was so happy. They are started to help the botter and said, "Thank you, so she patient the rose.`
 
 ---
 
