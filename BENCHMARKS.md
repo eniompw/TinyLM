@@ -29,7 +29,7 @@ Every entry below changes **only one thing at a time**. This is the scientific m
 | SimpleTransformer.py | 67.2% | 2000 | 35.6s |
 | **TinyTransformer.py (2 layers)** 🥇 | **68.4%** | **2000** | **19.7s** |
 | TinyTransformer.py (context=64) | 68.5% | 1800 | 197.5s |
-| TinyTransformer.py (3 layers) | 73.5% | 2200 | 36.3s |
+| TinyTransformer.py (3 layers) | 73.5% | 2200 | ~33s |
 | TinyTransformer.py (4 layers) | 73.1% | 3400 | 79.9s |
 | microgpt_lite.py | 79.4% | 3500 | 202.0s |
 
@@ -59,20 +59,24 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 
 Want to graph our progress? Here is the accuracy of each model at different points in training. *(Blank cells mean we stopped training that model early).*
 
-| Step | NameSLP | TinyMLP | SimpleTrans | **TinyTrans (2L)** | TinyTrans (3L) | TinyTrans (4L) | microgpt |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 0 | 3.5% | 4.7% | 4.0% | 19.3% | 19.3% | 19.3% | 1.7% |
-| 200 | 37.1% | 44.8% | 53.5% | 54.8% | 55.8% | 56.8% | 53.6% |
-| 400 | 38.2% | 48.9% | 58.6% | 58.3% | 59.7% | 60.7% | 65.2% |
-| 800 | 38.9% | 55.0% | 62.4% | 63.2% | 64.8% | 64.6% | 71.4% |
-| 1200 | 39.2% | 56.7% | 64.7% | 65.5% | 66.6% | 66.6% | 73.3% |
-| 1600 | 39.5% | 58.3% | 66.2% | 67.0% | 67.6% | 68.0% | 76.0% |
-| 2000 | 39.6% | 59.4% | 67.2% | 67.4% | 70.2% | 68.9% | 77.0% |
-| 2200 | - | - | - | - | 73.5% | - | - |
-| 3400 | - | - | - | - | - | 73.1% | - |
-| 3500 | - | - | - | - | - | - | 79.4% |
+| Step | NameSLP | TinyMLP | SimpleTrans | **TinyTrans (2L)** | TinyTrans (3L) Run 1 | TinyTrans (3L) Run 2 | TinyTrans (4L) | microgpt |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 3.5% | 4.7% | 4.0% | 19.3% | 19.3% | 19.3% | 19.3% | 1.7% |
+| 200 | 37.1% | 44.8% | 53.5% | 54.8% | 55.8% | 56.1% | 56.8% | 53.6% |
+| 400 | 38.2% | 48.9% | 58.6% | 58.3% | 59.7% | 59.8% | 60.7% | 65.2% |
+| 800 | 38.9% | 55.0% | 62.4% | 63.2% | 64.8% | 64.6% | 64.6% | 71.4% |
+| 1200 | 39.2% | 56.7% | 64.7% | 65.5% | 66.6% | 66.2% | 66.6% | 73.3% |
+| 1600 | 39.5% | 58.3% | 66.2% | 67.0% | 67.6% | 67.4% | 68.0% | 76.0% |
+| 2000 | 39.6% | 59.4% | 67.2% | 67.4% | 70.2% | 68.8% | 68.9% | 77.0% |
+| 2200 | - | - | - | - | **73.5%** ⭐ | **72.9%** ⭐ | - | - |
+| 2400 | - | - | - | - | 71.7% | 71.2% | - | - |
+| 2600 | - | - | - | - | - | 70.9% | - | - |
+| 2800 | - | - | - | - | - | 71.5% | - | - |
+| 3000 | - | - | - | - | - | 71.5% | - | - |
+| 3400 | - | - | - | - | - | - | 73.1% | - |
+| 3500 | - | - | - | - | - | - | - | 79.4% |
 
-*(Note: The 3-layer model hits peak accuracy at step 2200 before LR decay noise sets in. Some models like TinyTrans-4L take more steps to reach their peak, while simple models plateau very early).*
+*(Note: ⭐ marks the confirmed peak for 3-layer models. Both runs peak at step 2200 then plateau/oscillate — training beyond this step wastes time with no accuracy gain. Simple models plateau very early, while deeper models like 4L keep improving if given more steps.)*
 
 ---
 
@@ -85,17 +89,25 @@ Want to graph our progress? Here is the accuracy of each model at different poin
 **The Takeaway:** The 26-second penalty happens entirely at Step 0. Always run your code once, throw away the time, and run it again to see the true speed.
 
 ### 2. Layer Depth (2 vs 3 layers)
-**The Experiment:** We added one extra layer (going from 2 to 3), keeping all other hyperparameters identical (embed_dim=256, n_heads=4, ffn_dim=1024, context_size=8, batch_size=1024).
-*   **Params:** 2,404,160 (~400K more than the 2-layer baseline)
-*   **Peak Accuracy:** 73.5% at step 2200 (vs 68.4% for 2L at step 2000)
-*   **Training Time:** 36.3s for 2400 steps (~3s per 200 steps throughout)
+**The Experiment:** We added one extra layer (going from 2 to 3), keeping all other hyperparameters identical (embed_dim=256, n_heads=4, ffn_dim=1024, context_size=8, batch_size=1024). We ran this experiment **twice** to verify the findings.
 
-**Result:** The 3-layer model matches the 4-layer model's best accuracy (73.1%) in **less than half the training time** (36.3s vs 79.9s). It hits peak at step 2200 — after that, LR decay noise causes a slight dip to 71.7% at step 2400, so early stopping is recommended.
+| | Run 1 | Run 2 |
+| :--- | ---: | ---: |
+| Steps run | 2400 | 3000 |
+| Peak accuracy | 73.5% | 72.9% |
+| Peak at step | 2200 | 2200 |
+| Time to peak | ~33s | ~33s |
+| Total training time | 36.3s | 44.9s |
 
-**The Takeaway:** 3 layers is the **sweet spot** for this architecture — the best speed/accuracy tradeoff in the transformer family so far. Adding a single layer unlocked +5% accuracy without the heavy cost of going to 4 layers.
+**Result:** Both runs peak at exactly **step 2200** (~73%) then flatline in the 71–72% range for all remaining steps. The ~0.6% gap between runs is within normal Colab T4 variance. The 3-layer model matches the 4-layer model's best accuracy (73.1%) in **less than half the training time** (~33s vs 79.9s).
 
-**Generated Sample (73.5% Acc):**
+**The Takeaway:** 3 layers is the **sweet spot** for this architecture. Stop training at step 2200 — running longer only wastes compute with no benefit. The cosine LR scheduler has decayed to near `eta_min=1e-4` by then, and the model is just jittering around its minimum.
+
+**Generated Sample — Run 1 (73.5% Acc):**
 > `Once there was a little girl. They were happy. He saw a little boy named Tim went to the park. They ran away. They gave the chool. They raced and said, "Hi, I'm sorry, she decided to take his friendly.`
+
+**Generated Sample — Run 2 (72.9% Acc):**
+> `Once there was a big red ball the door was very happy. She said, "Okay, he saw many toys at the rock. The next day, the snow. She had to find forth a magic sad. The boat and inside and the flame, but I can`
 
 ### 3. Layer Depth (2 vs 4 layers)
 **The Experiment:** We doubled the layers from 2 to 4 (adding 1.5 million parameters).
