@@ -31,6 +31,7 @@ Every entry below changes **only one thing at a time**. This is the scientific m
 | TinyTransformer.py (context=64) | 68.5% | 1800 | 197.5s |
 | TinyTransformer.py (Narrow-Deep 4L, 810K params) | 68.9% | 2400 | 68.0s |
 | TinyTransformer.py (Efficient-Deep 4L, ffn=512) | 70.8% | 2000 | 45.5s |
+| TinyTransformer.py (Balanced Narrow-Deep 4L, 192d) | 70.8% | 2400 | 57.7s |
 | TinyTransformer.py (3 layers) | 73.5% | 2200 | ~33s |
 | TinyTransformer.py (4 layers) | 73.1% | 3400 | 79.9s |
 | microgpt_lite.py | 79.4% | 3500 | 202.0s |
@@ -56,6 +57,7 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 | **Flash Attention** + Context 32 | +0.2% | 3.2× slower | ⚠️ Proves memory-efficient math works, but model needs to be bigger to use it. |
 | **Narrow-Deep Alt. HPs** (128d, 4L, 810K params) | +0.5% | 3.4× slower | ⚠️ Half the params, competitive accuracy — likely under-trained. |
 | **Efficient-Deep** (256d, ffn=512, 4L) | +2.4% | 2.3× slower | ⚠️ Strong mid-training but peaks at step 2000, not 2200. Anomalous step-0 loss spike. |
+| **Balanced Narrow-Deep** (192d, ffn=768, 4L) | +2.4% | 2.8× slower | ⚠️ Ties Efficient-Deep at 70.8% but still climbing at step 2400 — likely under-trained. Clean step-0, best text quality in this series. |
 
 ---
 
@@ -63,24 +65,24 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 
 Want to graph our progress? Here is the accuracy of each model at different points in training. *(Blank cells mean we stopped training that model early).*
 
-| Step | NameSLP | TinyMLP | SimpleTrans | **TinyTrans (2L)** | TinyTrans (3L) Run 1 | TinyTrans (3L) Run 2 | TinyTrans (4L) | Narrow-Deep 4L | Efficient-Deep 4L | microgpt |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 0 | 3.5% | 4.7% | 4.0% | 19.3% | 19.3% | 19.3% | 19.3% | 10.6% | 5.2% | 1.7% |
-| 200 | 37.1% | 44.8% | 53.5% | 54.8% | 55.8% | 56.1% | 56.8% | 54.3% | 55.1% | 53.6% |
-| 400 | 38.2% | 48.9% | 58.6% | 58.3% | 59.7% | 59.8% | 60.7% | 58.7% | 60.7% | 65.2% |
-| 800 | 38.9% | 55.0% | 62.4% | 63.2% | 64.8% | 64.6% | 64.6% | 63.0% | 63.9% | 71.4% |
-| 1200 | 39.2% | 56.7% | 64.7% | 65.5% | 66.6% | 66.2% | 66.6% | 66.0% | 67.1% | 73.3% |
-| 1600 | 39.5% | 58.3% | 66.2% | 67.0% | 67.6% | 67.4% | 68.0% | 67.8% | 68.4% | 76.0% |
-| 2000 | 39.6% | 59.4% | 67.2% | 67.4% | 70.2% | 68.8% | 68.9% | 69.4% | **70.8%** ⭐ | 77.0% |
-| 2200 | - | - | - | - | **73.5%** ⭐ | **72.9%** ⭐ | - | 68.1% | 69.7% | - |
-| 2400 | - | - | - | - | 71.7% | 71.2% | - | 68.9% | - | - |
-| 2600 | - | - | - | - | - | 70.9% | - | - | - | - |
-| 2800 | - | - | - | - | - | 71.5% | - | - | - | - |
-| 3000 | - | - | - | - | - | 71.5% | - | - | - | - |
-| 3400 | - | - | - | - | - | - | 73.1% | - | - | - |
-| 3500 | - | - | - | - | - | - | - | - | - | 79.4% |
+| Step | NameSLP | TinyMLP | SimpleTrans | **TinyTrans (2L)** | TinyTrans (3L) Run 1 | TinyTrans (3L) Run 2 | TinyTrans (4L) | Narrow-Deep 4L | Efficient-Deep 4L | Balanced ND 4L | microgpt |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 3.5% | 4.7% | 4.0% | 19.3% | 19.3% | 19.3% | 19.3% | 10.6% | 5.2% | 19.3% | 1.7% |
+| 200 | 37.1% | 44.8% | 53.5% | 54.8% | 55.8% | 56.1% | 56.8% | 54.3% | 55.1% | 56.6% | 53.6% |
+| 400 | 38.2% | 48.9% | 58.6% | 58.3% | 59.7% | 59.8% | 60.7% | 58.7% | 60.7% | 60.7% | 65.2% |
+| 800 | 38.9% | 55.0% | 62.4% | 63.2% | 64.8% | 64.6% | 64.6% | 63.0% | 63.9% | 65.6% | 71.4% |
+| 1200 | 39.2% | 56.7% | 64.7% | 65.5% | 66.6% | 66.2% | 66.6% | 66.0% | 67.1% | 67.1% | 73.3% |
+| 1600 | 39.5% | 58.3% | 66.2% | 67.0% | 67.6% | 67.4% | 68.0% | 67.8% | 68.4% | 70.0% | 76.0% |
+| 2000 | 39.6% | 59.4% | 67.2% | 67.4% | 70.2% | 68.8% | 68.9% | 69.4% | **70.8%** ⭐ | 70.5% | 77.0% |
+| 2200 | - | - | - | - | **73.5%** ⭐ | **72.9%** ⭐ | - | 68.1% | 69.7% | 70.4% | - |
+| 2400 | - | - | - | - | 71.7% | 71.2% | - | 68.9% | - | **70.8%** ⭐ | - |
+| 2600 | - | - | - | - | - | 70.9% | - | - | - | - | - |
+| 2800 | - | - | - | - | - | 71.5% | - | - | - | - | - |
+| 3000 | - | - | - | - | - | 71.5% | - | - | - | - | - |
+| 3400 | - | - | - | - | - | - | 73.1% | - | - | - | - |
+| 3500 | - | - | - | - | - | - | - | - | - | - | 79.4% |
 
-*(Note: ⭐ marks the confirmed peak for each model. Both 3L runs peak at step 2200 then plateau/oscillate — training beyond this step wastes time with no accuracy gain. The Efficient-Deep 4L model peaks earlier at step 2000 before dropping at 2200, suggesting the cosine LR schedule is poorly matched to this architecture.)*
+*(Note: ⭐ marks the confirmed peak for each model. Both 3L runs peak at step 2200 then plateau/oscillate — training beyond this step wastes time with no accuracy gain. The Efficient-Deep 4L peaks early at step 2000. The Balanced Narrow-Deep 4L is still descending at step 2400 and likely has more headroom.)*
 
 ---
 
@@ -227,6 +229,46 @@ Training time: 45.5s
 
 **Generated Sample (70.8% Acc):**
 > `Once there was a little girl named Max. Mom looked at the pole and the ball and lots of fun and shining, something unexpected happened. He took the boy's mom told the tree to the same to her said`
+
+### 14. Balanced Narrow-Deep (192d, ffn=768, 4 Layers)
+**The Experiment:** A true compromise between Experiment #12 (128d, too narrow) and Experiment #13 (256d+ffn=512, anomalous init). We split the difference: `embed_dim=192` (clean head_dim of 48 with 4 heads), `ffn_dim=768` (exactly 4× embed_dim, the standard ratio), and 4 layers.
+
+```python
+# --- Hyperparameters for Balanced Narrow-Deep ---
+context_size = 8
+embed_dim    = 192       # Compromise between 128 and 256
+n_heads      = 4         # (192 / 4 = 48 head_dim, which is clean)
+ffn_dim      = 768       # Compromise between 512 and 1024 (4x embed_dim)
+n_layers     = 4
+batch_size   = 1024
+lr           = 1e-3
+n_steps      = 2401
+```
+
+```
+params: 1,805,632
+Step    0 | Loss: 4.4319 | Acc: 19.3% |  0.1s
+Step  200 | Loss: 1.3701 | Acc: 56.6% |  4.7s
+Step  400 | Loss: 1.2700 | Acc: 60.7% |  9.4s
+Step  600 | Loss: 1.2365 | Acc: 63.2% | 14.1s
+Step  800 | Loss: 1.1471 | Acc: 65.6% | 18.8s
+Step 1000 | Loss: 1.1224 | Acc: 66.1% | 23.7s
+Step 1200 | Loss: 1.0519 | Acc: 67.1% | 28.5s
+Step 1400 | Loss: 1.0115 | Acc: 67.5% | 33.3s
+Step 1600 | Loss: 1.0121 | Acc: 70.0% | 38.0s
+Step 1800 | Loss: 0.9719 | Acc: 69.3% | 42.6s
+Step 2000 | Loss: 0.9418 | Acc: 70.5% | 47.3s
+Step 2200 | Loss: 0.9357 | Acc: 70.4% | 52.5s
+Step 2400 | Loss: 0.8969 | Acc: 70.8% | 57.7s  ← PEAK (still descending)
+Training time: 57.7s
+```
+
+**Result:** Peaked at **70.8% at step 2400**, with loss still falling (0.942 → 0.897 in the last 400 steps) — unlike Experiment #13, this model has **not plateaued**. Step-0 loss is clean (4.43), confirming the initialization anomaly in Experiment #13 was specific to the 256d+ffn=512 mismatch. Text quality is the best in this experimental series: coherent dialogue, correct punctuation, no invented words.
+
+**The Takeaway:** This model is **under-trained**. The still-descending loss and accuracy at step 2400 strongly suggest it would reach ~72–73% given 3400–4000 steps — potentially matching the 3-layer model. However, at 57.7s for 2400 steps (~0.024s/step), a full run to 3400 steps would take ~82s, making it slower than the 3L sweet spot (~33s). The 192d config fixes the Experiment #13 initialization problem, but the 3-layer model remains the most time-efficient path to 73%+.
+
+**Generated Sample (70.8% Acc):**
+> `Once there she was happy. They did not know that it was time to go back to the house with the gray to see his mom, "What's that!" Mom says. "I don't want to see that the town want to make the store to learn`
 
 ---
 
