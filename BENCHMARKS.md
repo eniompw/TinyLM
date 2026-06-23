@@ -32,10 +32,12 @@ Every entry below changes **only one thing at a time**. This is the scientific m
 | TinyTransformer.py (Narrow-Deep 4L, 810K params) | 68.9% | 2400 | 68.0s |
 | TinyTransformer.py (Efficient-Deep 4L, ffn=512) | 70.8% | 2000 | 45.5s |
 | TinyTransformer.py (Balanced Narrow-Deep 4L, 192d) | 70.8% | 2400 | 57.7s |
-| TinyTransformer.py (3 layers) | 73.5% | 2200 | ~33s |
 | TinyTransformer.py (3 layers, Wider FFN=2048) | 71.8% | 2200 | 59.1s |
-| TinyTransformer.py (3 layers, Batch=2048, LR=2e-3) | 76.1% | 2200 | 90.7s |
+| TinyTransformer.py (3 layers, batch=1024, lr=2e-3) | 72.4% | 2200 | 49.0s |
 | TinyTransformer.py (4 layers) | 73.1% | 3400 | 79.9s |
+| TinyTransformer.py (3 layers) | 73.5% | 2200 | ~33s |
+| TinyTransformer.py (3 layers, batch=1536, lr=2e-3) | 75.2% | 2200 | 75.3s |
+| TinyTransformer.py (3 layers, batch=2048, lr=2e-3) | 76.1% | 2200 | 90.7s |
 | microgpt_lite.py | 79.4% | 3500 | 202.0s |
 
 ---
@@ -61,6 +63,8 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 | **Efficient-Deep** (256d, ffn=512, 4L) | +2.4% | 2.3× slower | ⚠️ Strong mid-training but peaks at step 2000, not 2200. Anomalous step-0 loss spike. |
 | **Balanced Narrow-Deep** (192d, ffn=768, 4L) | +2.4% | 2.8× slower | ⚠️ Ties Efficient-Deep at 70.8% but still climbing at step 2400 — likely under-trained. Clean step-0, best text quality in this series. |
 | **Wider FFN** (3L, ffn=2048) | +3.4% | 3.0× slower | ⚠️ Bigger MLP helps, but not enough to beat standard 3L. Likely schedule-limited. |
+| **High LR Fast Convergence** (3L, batch=1024, lr=2e-3) | +4.0% | 2.5× slower | ⚠️ Faster than large-batch runs, but step-0 instability and post-peak collapse show small batch + high LR is too noisy. |
+| **Middle Ground** (3L, batch=1536, lr=2e-3) | +6.8% | 3.8× slower | ✅ Excellent compromise — 98% of the batch=2048 result at ~83% of the time. |
 | **Large Batch + High LR** (3L, batch=2048, lr=2e-3) | +7.7% | 4.6× slower | ✅ Huge accuracy win — best non-microgpt result so far. More data per step appears to matter more than extra depth or FFN size. |
 
 ---
@@ -69,24 +73,24 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 
 Want to graph our progress? Here is the accuracy of each model at different points in training. *(Blank cells mean we stopped training that model early).*
 
-| Step | NameSLP | TinyMLP | SimpleTrans | **TinyTrans (2L)** | TinyTrans (3L) Run 1 | TinyTrans (3L) Run 2 | TinyTrans (4L) | Narrow-Deep 4L | Efficient-Deep 4L | Balanced ND 4L | Wider FFN 3L | Large Batch+LR 3L | microgpt |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 0 | 3.5% | 4.7% | 4.0% | 19.3% | 19.3% | 19.3% | 19.3% | 10.6% | 5.2% | 19.3% | 20.2% | 19.3% | 1.7% |
-| 200 | 37.1% | 44.8% | 53.5% | 54.8% | 55.8% | 56.1% | 56.8% | 54.3% | 55.1% | 56.6% | 55.4% | 58.0% | 53.6% |
-| 400 | 38.2% | 48.9% | 58.6% | 58.3% | 59.7% | 59.8% | 60.7% | 58.7% | 60.7% | 60.7% | 59.9% | 60.8% | 65.2% |
-| 800 | 38.9% | 55.0% | 62.4% | 63.2% | 64.8% | 64.6% | 64.6% | 63.0% | 63.9% | 65.6% | 64.7% | 66.9% | 71.4% |
-| 1200 | 39.2% | 56.7% | 64.7% | 65.5% | 66.6% | 66.2% | 66.6% | 66.0% | 67.1% | 67.1% | 67.4% | 68.6% | 73.3% |
-| 1600 | 39.5% | 58.3% | 66.2% | 67.0% | 67.6% | 67.4% | 68.0% | 67.8% | 68.4% | 70.0% | 70.2% | 71.0% | 76.0% |
-| 2000 | 39.6% | 59.4% | 67.2% | 67.4% | 70.2% | 68.8% | 68.9% | 69.4% | **70.8%** ⭐ | 70.5% | 71.1% | 72.3% | 77.0% |
-| 2200 | - | - | - | - | **73.5%** ⭐ | **72.9%** ⭐ | - | 68.1% | 69.7% | 70.4% | **71.8%** ⭐ | **76.1%** ⭐ | - |
-| 2400 | - | - | - | - | 71.7% | 71.2% | - | 68.9% | - | **70.8%** ⭐ | - | - | - |
-| 2600 | - | - | - | - | - | 70.9% | - | - | - | - | - | - | - |
-| 2800 | - | - | - | - | - | 71.5% | - | - | - | - | - | - | - |
-| 3000 | - | - | - | - | - | 71.5% | - | - | - | - | - | - | - |
-| 3400 | - | - | - | - | - | - | 73.1% | - | - | - | - | - | - |
-| 3500 | - | - | - | - | - | - | - | - | - | - | - | - | 79.4% |
+| Step | NameSLP | TinyMLP | SimpleTrans | **TinyTrans (2L)** | TinyTrans (3L) Run 1 | TinyTrans (3L) Run 2 | TinyTrans (4L) | Narrow-Deep 4L | Efficient-Deep 4L | Balanced ND 4L | Wider FFN 3L | High LR 3L | Middle Ground 3L | Large Batch+LR 3L | microgpt |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 3.5% | 4.7% | 4.0% | 19.3% | 19.3% | 19.3% | 19.3% | 10.6% | 5.2% | 19.3% | 20.2% | 19.3% | 19.3% | 19.3% | 1.7% |
+| 200 | 37.1% | 44.8% | 53.5% | 54.8% | 55.8% | 56.1% | 56.8% | 54.3% | 55.1% | 56.6% | 55.4% | 55.3% | 57.5% | 58.0% | 53.6% |
+| 400 | 38.2% | 48.9% | 58.6% | 58.3% | 59.7% | 59.8% | 60.7% | 58.7% | 60.7% | 60.7% | 59.9% | 58.3% | 60.2% | 60.8% | 65.2% |
+| 800 | 38.9% | 55.0% | 62.4% | 63.2% | 64.8% | 64.6% | 64.6% | 63.0% | 63.9% | 65.6% | 64.7% | 62.9% | 65.5% | 66.9% | 71.4% |
+| 1200 | 39.2% | 56.7% | 64.7% | 65.5% | 66.6% | 66.2% | 66.6% | 66.0% | 67.1% | 67.1% | 67.4% | 64.5% | 67.2% | 68.6% | 73.3% |
+| 1600 | 39.5% | 58.3% | 66.2% | 67.0% | 67.6% | 67.4% | 68.0% | 67.8% | 68.4% | 70.0% | 70.2% | 66.2% | 69.9% | 71.0% | 76.0% |
+| 2000 | 39.6% | 59.4% | 67.2% | 67.4% | 70.2% | 68.8% | 68.9% | 69.4% | **70.8%** ⭐ | 70.5% | 71.1% | 68.8% | 70.8% | 72.3% | 77.0% |
+| 2200 | - | - | - | - | **73.5%** ⭐ | **72.9%** ⭐ | - | 68.1% | 69.7% | 70.4% | **71.8%** ⭐ | **72.4%** ⭐ | **75.2%** ⭐ | **76.1%** ⭐ | - |
+| 2400 | - | - | - | - | 71.7% | 71.2% | - | 68.9% | - | **70.8%** ⭐ | - | 71.1% | 73.0% | - | - |
+| 2600 | - | - | - | - | - | 70.9% | - | - | - | - | - | 70.6% | - | - | - |
+| 2800 | - | - | - | - | - | 71.5% | - | - | - | - | - | 71.5% | - | - | - |
+| 3000 | - | - | - | - | - | 71.5% | - | - | - | - | - | 70.8% | - | - | - |
+| 3400 | - | - | - | - | - | - | 73.1% | - | - | - | - | - | - | - | - |
+| 3500 | - | - | - | - | - | - | - | - | - | - | - | - | - | - | 79.4% |
 
-*(Note: ⭐ marks the confirmed peak for each model. Both 3L runs peak at step 2200 then plateau/oscillate — training beyond this step wastes time with no accuracy gain. The Efficient-Deep 4L peaks early at step 2000. The Balanced Narrow-Deep 4L is still descending at step 2400 and likely has more headroom. The Large Batch + High LR run establishes a new best TinyTransformer result at 76.1%.)*
+*(Note: ⭐ marks the confirmed peak for each model. Both original 3L runs peak at step 2200 then plateau/oscillate. Efficient-Deep 4L peaks early at step 2000. Balanced Narrow-Deep 4L is still descending at step 2400. The two new high-LR experiments show the same pattern: peak at step 2200, then immediate decline. Batch size controls stability — 1536 and 2048 behave much better than 1024 at lr=2e-3.)*
 
 ---
 
@@ -351,6 +355,90 @@ Training time: 90.7s
 
 **Generated Sample (76.1% Acc):**
 > `Once there was a little girl named Lily. She saw the new toy. He liked to play with her mom smiled and said, "Hello, Spot saw Tom was very happy with the cake was so smaller saw a big that she was happy`
+
+### 17. High LR Fast Convergence (3 Layers, 1024 batch)
+**The Experiment:** Could we keep the **high learning rate** from Experiment #16 but revert the batch size back to 1024 for speed? The idea was to recover most of the large-batch accuracy boost while cutting the runtime nearly in half.
+
+```python
+# --- Hyperparameters for High LR Fast Convergence ---
+context_size = 8
+embed_dim    = 256
+n_heads      = 4
+ffn_dim      = 1024
+n_layers     = 3
+batch_size   = 1024      # REVERTED to 1024 for speed
+lr           = 2e-3      # KEEP the high learning rate!
+n_steps      = 3001      # INCREASED steps to compensate for smaller batch
+```
+
+```
+params: 2,404,160
+Step    0 | Loss: 11.7465 | Acc: 19.3% |  0.1s
+Step  200 | Loss: 1.4829 | Acc: 55.3% |  3.3s
+Step  400 | Loss: 1.4059 | Acc: 58.3% |  6.6s
+Step  600 | Loss: 1.3533 | Acc: 59.9% |  9.8s
+Step  800 | Loss: 1.2082 | Acc: 62.9% | 13.1s
+Step 1000 | Loss: 1.2354 | Acc: 64.4% | 16.4s
+Step 1200 | Loss: 1.1543 | Acc: 64.5% | 19.8s
+Step 1400 | Loss: 1.1276 | Acc: 66.5% | 23.2s
+Step 1600 | Loss: 1.0451 | Acc: 66.2% | 26.5s
+Step 1800 | Loss: 1.0449 | Acc: 68.0% | 29.8s
+Step 2000 | Loss: 1.0548 | Acc: 68.8% | 33.1s
+Step 2200 | Loss: 0.9309 | Acc: 72.4% | 36.3s  ← PEAK
+Step 2400 | Loss: 0.9039 | Acc: 71.1% | 39.5s
+Step 2600 | Loss: 0.8707 | Acc: 70.6% | 42.7s
+Step 2800 | Loss: 0.9165 | Acc: 71.5% | 45.8s
+Step 3000 | Loss: 0.9198 | Acc: 70.8% | 49.0s
+Training time: 49.0s
+```
+
+**Result:** The model did partially recover: it hit **72.4% at step 2200**, beating the Wider-FFN and all 4-layer custom variants, while staying much faster than the big-batch runs. But it suffered from the same step-0 instability seen in Experiment #13: initial loss exploded to **11.75**, and accuracy declined immediately after the peak. Running longer did not help.
+
+**The Takeaway:** High LR alone is not enough. Without the larger batch to stabilize the gradient, `lr=2e-3` is simply too noisy for this architecture. This config is a valid **speed-focused compromise** — 72.4% in 49s is solid — but it cannot match the stability or final quality of the 1536/2048-batch runs.
+
+**Generated Sample (72.4% Acc):**
+> `Once there was a big red ball to bite. She wanted to play. They like lift heard a big red to play with her mom and dad. The sun and the sky!" They are sad. But then, a moment. Then the cat. They all wanted`
+
+### 18. Middle Ground (3 Layers, 1536 batch)
+**The Experiment:** A compromise between Experiments #16 and #17. We kept the high learning rate (`2e-3`) but used a **1536 batch size** — halfway between 1024 and 2048 — to see if we could retain most of the large-batch accuracy gain at lower runtime.
+
+```python
+# --- Hyperparameters for Middle Ground ---
+context_size = 8
+embed_dim    = 256
+n_heads      = 4
+ffn_dim      = 1024
+n_layers     = 3
+batch_size   = 1536      # Compromise between 1024 and 2048
+lr           = 2e-3      # Keep high LR
+n_steps      = 2401      # Slightly reduced from 2200 to ensure time limit
+```
+
+```
+params: 2,404,160
+Step    0 | Loss: 4.7377 | Acc: 19.3% |  0.1s
+Step  200 | Loss: 1.3945 | Acc: 57.5% |  6.2s
+Step  400 | Loss: 1.3220 | Acc: 60.2% | 12.4s
+Step  600 | Loss: 1.2569 | Acc: 62.6% | 18.6s
+Step  800 | Loss: 1.1078 | Acc: 65.5% | 24.9s
+Step 1000 | Loss: 1.1215 | Acc: 67.1% | 31.4s
+Step 1200 | Loss: 1.0225 | Acc: 67.2% | 37.9s
+Step 1400 | Loss: 1.0346 | Acc: 69.0% | 44.3s
+Step 1600 | Loss: 0.8978 | Acc: 69.9% | 50.6s
+Step 1800 | Loss: 0.9007 | Acc: 71.1% | 56.9s
+Step 2000 | Loss: 0.9295 | Acc: 70.8% | 63.0s
+Step 2200 | Loss: 0.8863 | Acc: 75.2% | 69.2s  ← PEAK
+Step 2400 | Loss: 0.8680 | Acc: 73.0% | 75.3s
+Training time: 75.3s
+```
+
+**Result:** This worked very well: **75.2% at step 2200**, only 0.9% behind the 2048-batch champion, while saving ~15 seconds of runtime. Importantly, the step-0 loss returned to normal (4.74), showing that the larger batch stabilizes the aggressive learning rate.
+
+**The Takeaway:** This is the **best compromise** discovered so far. It captures almost all of the large-batch benefit at a meaningfully lower cost: about **98% of the accuracy for ~83% of the time**. If Experiment #16 is the quality champion, this one is the practical high-performance alternative.
+
+**Generated Sample (75.2% Acc):**
+> `Once there was a little girl named Lily. Lily was sad and said, "Yes, we can put his ball flew through the bell and carry box.
+Max was so happy that Tom were three years old and said, "Hi, dropped with the be`
 
 ---
 
