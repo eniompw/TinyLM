@@ -33,6 +33,8 @@ Every entry below changes **only one thing at a time**. This is the scientific m
 | TinyTransformer.py (Efficient-Deep 4L, ffn=512) | 70.8% | 2000 | 45.5s |
 | TinyTransformer.py (Balanced Narrow-Deep 4L, 192d) | 70.8% | 2400 | 57.7s |
 | TinyTransformer.py (3 layers) | 73.5% | 2200 | ~33s |
+| TinyTransformer.py (3 layers, Wider FFN=2048) | 71.8% | 2200 | 59.1s |
+| TinyTransformer.py (3 layers, Batch=2048, LR=2e-3) | 76.1% | 2200 | 90.7s |
 | TinyTransformer.py (4 layers) | 73.1% | 3400 | 79.9s |
 | microgpt_lite.py | 79.4% | 3500 | 202.0s |
 
@@ -58,6 +60,8 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 | **Narrow-Deep Alt. HPs** (128d, 4L, 810K params) | +0.5% | 3.4× slower | ⚠️ Half the params, competitive accuracy — likely under-trained. |
 | **Efficient-Deep** (256d, ffn=512, 4L) | +2.4% | 2.3× slower | ⚠️ Strong mid-training but peaks at step 2000, not 2200. Anomalous step-0 loss spike. |
 | **Balanced Narrow-Deep** (192d, ffn=768, 4L) | +2.4% | 2.8× slower | ⚠️ Ties Efficient-Deep at 70.8% but still climbing at step 2400 — likely under-trained. Clean step-0, best text quality in this series. |
+| **Wider FFN** (3L, ffn=2048) | +3.4% | 3.0× slower | ⚠️ Bigger MLP helps, but not enough to beat standard 3L. Likely schedule-limited. |
+| **Large Batch + High LR** (3L, batch=2048, lr=2e-3) | +7.7% | 4.6× slower | ✅ Huge accuracy win — best non-microgpt result so far. More data per step appears to matter more than extra depth or FFN size. |
 
 ---
 
@@ -65,24 +69,24 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 
 Want to graph our progress? Here is the accuracy of each model at different points in training. *(Blank cells mean we stopped training that model early).*
 
-| Step | NameSLP | TinyMLP | SimpleTrans | **TinyTrans (2L)** | TinyTrans (3L) Run 1 | TinyTrans (3L) Run 2 | TinyTrans (4L) | Narrow-Deep 4L | Efficient-Deep 4L | Balanced ND 4L | microgpt |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 0 | 3.5% | 4.7% | 4.0% | 19.3% | 19.3% | 19.3% | 19.3% | 10.6% | 5.2% | 19.3% | 1.7% |
-| 200 | 37.1% | 44.8% | 53.5% | 54.8% | 55.8% | 56.1% | 56.8% | 54.3% | 55.1% | 56.6% | 53.6% |
-| 400 | 38.2% | 48.9% | 58.6% | 58.3% | 59.7% | 59.8% | 60.7% | 58.7% | 60.7% | 60.7% | 65.2% |
-| 800 | 38.9% | 55.0% | 62.4% | 63.2% | 64.8% | 64.6% | 64.6% | 63.0% | 63.9% | 65.6% | 71.4% |
-| 1200 | 39.2% | 56.7% | 64.7% | 65.5% | 66.6% | 66.2% | 66.6% | 66.0% | 67.1% | 67.1% | 73.3% |
-| 1600 | 39.5% | 58.3% | 66.2% | 67.0% | 67.6% | 67.4% | 68.0% | 67.8% | 68.4% | 70.0% | 76.0% |
-| 2000 | 39.6% | 59.4% | 67.2% | 67.4% | 70.2% | 68.8% | 68.9% | 69.4% | **70.8%** ⭐ | 70.5% | 77.0% |
-| 2200 | - | - | - | - | **73.5%** ⭐ | **72.9%** ⭐ | - | 68.1% | 69.7% | 70.4% | - |
-| 2400 | - | - | - | - | 71.7% | 71.2% | - | 68.9% | - | **70.8%** ⭐ | - |
-| 2600 | - | - | - | - | - | 70.9% | - | - | - | - | - |
-| 2800 | - | - | - | - | - | 71.5% | - | - | - | - | - |
-| 3000 | - | - | - | - | - | 71.5% | - | - | - | - | - |
-| 3400 | - | - | - | - | - | - | 73.1% | - | - | - | - |
-| 3500 | - | - | - | - | - | - | - | - | - | - | 79.4% |
+| Step | NameSLP | TinyMLP | SimpleTrans | **TinyTrans (2L)** | TinyTrans (3L) Run 1 | TinyTrans (3L) Run 2 | TinyTrans (4L) | Narrow-Deep 4L | Efficient-Deep 4L | Balanced ND 4L | Wider FFN 3L | Large Batch+LR 3L | microgpt |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 3.5% | 4.7% | 4.0% | 19.3% | 19.3% | 19.3% | 19.3% | 10.6% | 5.2% | 19.3% | 20.2% | 19.3% | 1.7% |
+| 200 | 37.1% | 44.8% | 53.5% | 54.8% | 55.8% | 56.1% | 56.8% | 54.3% | 55.1% | 56.6% | 55.4% | 58.0% | 53.6% |
+| 400 | 38.2% | 48.9% | 58.6% | 58.3% | 59.7% | 59.8% | 60.7% | 58.7% | 60.7% | 60.7% | 59.9% | 60.8% | 65.2% |
+| 800 | 38.9% | 55.0% | 62.4% | 63.2% | 64.8% | 64.6% | 64.6% | 63.0% | 63.9% | 65.6% | 64.7% | 66.9% | 71.4% |
+| 1200 | 39.2% | 56.7% | 64.7% | 65.5% | 66.6% | 66.2% | 66.6% | 66.0% | 67.1% | 67.1% | 67.4% | 68.6% | 73.3% |
+| 1600 | 39.5% | 58.3% | 66.2% | 67.0% | 67.6% | 67.4% | 68.0% | 67.8% | 68.4% | 70.0% | 70.2% | 71.0% | 76.0% |
+| 2000 | 39.6% | 59.4% | 67.2% | 67.4% | 70.2% | 68.8% | 68.9% | 69.4% | **70.8%** ⭐ | 70.5% | 71.1% | 72.3% | 77.0% |
+| 2200 | - | - | - | - | **73.5%** ⭐ | **72.9%** ⭐ | - | 68.1% | 69.7% | 70.4% | **71.8%** ⭐ | **76.1%** ⭐ | - |
+| 2400 | - | - | - | - | 71.7% | 71.2% | - | 68.9% | - | **70.8%** ⭐ | - | - | - |
+| 2600 | - | - | - | - | - | 70.9% | - | - | - | - | - | - | - |
+| 2800 | - | - | - | - | - | 71.5% | - | - | - | - | - | - | - |
+| 3000 | - | - | - | - | - | 71.5% | - | - | - | - | - | - | - |
+| 3400 | - | - | - | - | - | - | 73.1% | - | - | - | - | - | - |
+| 3500 | - | - | - | - | - | - | - | - | - | - | - | - | 79.4% |
 
-*(Note: ⭐ marks the confirmed peak for each model. Both 3L runs peak at step 2200 then plateau/oscillate — training beyond this step wastes time with no accuracy gain. The Efficient-Deep 4L peaks early at step 2000. The Balanced Narrow-Deep 4L is still descending at step 2400 and likely has more headroom.)*
+*(Note: ⭐ marks the confirmed peak for each model. Both 3L runs peak at step 2200 then plateau/oscillate — training beyond this step wastes time with no accuracy gain. The Efficient-Deep 4L peaks early at step 2000. The Balanced Narrow-Deep 4L is still descending at step 2400 and likely has more headroom. The Large Batch + High LR run establishes a new best TinyTransformer result at 76.1%.)*
 
 ---
 
@@ -269,6 +273,84 @@ Training time: 57.7s
 
 **Generated Sample (70.8% Acc):**
 > `Once there she was happy. They did not know that it was time to go back to the house with the gray to see his mom, "What's that!" Mom says. "I don't want to see that the town want to make the store to learn`
+
+### 15. Wider FFN (3 Layers, ffn=2048)
+**The Experiment:** Instead of adding depth, we doubled the feed-forward network size inside each transformer block: `ffn_dim=2048` while keeping the proven 3-layer backbone (`embed_dim=256`, `n_layers=3`). The hypothesis: a bigger MLP might unlock more token-mixing capacity without the overhead of a 4th layer.
+
+```python
+# --- Hyperparameters for Wider FFN ---
+context_size = 8
+embed_dim    = 256
+n_heads      = 4
+ffn_dim      = 2048      # DOUBLED from 1024
+n_layers     = 3
+batch_size   = 1024
+lr           = 1e-3
+n_steps      = 2201
+```
+
+```
+params: 3,980,096
+Step    0 | Loss: 4.7255 | Acc: 20.2% |  0.1s
+Step  200 | Loss: 1.4541 | Acc: 55.4% |  5.5s
+Step  400 | Loss: 1.3367 | Acc: 59.9% | 11.1s
+Step  600 | Loss: 1.2519 | Acc: 63.3% | 16.8s
+Step  800 | Loss: 1.1733 | Acc: 64.7% | 22.4s
+Step 1000 | Loss: 1.0781 | Acc: 67.3% | 27.9s
+Step 1200 | Loss: 1.0494 | Acc: 67.4% | 33.2s
+Step 1400 | Loss: 0.9938 | Acc: 69.3% | 38.5s
+Step 1600 | Loss: 0.9461 | Acc: 70.2% | 43.7s
+Step 1800 | Loss: 0.9570 | Acc: 70.3% | 48.8s
+Step 2000 | Loss: 0.8335 | Acc: 71.1% | 54.0s
+Step 2200 | Loss: 0.9290 | Acc: 71.8% | 59.1s
+Training time: 59.1s
+```
+
+**Result:** Accuracy improved steadily to **71.8% at step 2200**, but still failed to beat the standard 3-layer model's 73.5%. The loss curve is noisy late in training: loss drops sharply to 0.833 at step 2000, then rises again to 0.929 at step 2200 even while accuracy improves. This is a classic sign of a model that is too large for the current cosine LR schedule — it's learning, but not converging cleanly.
+
+**The Takeaway:** Simply making the FFN bigger is not an efficient way to spend parameters here. At **3,980,096 params**, this is by far the largest TinyTransformer variant so far, yet it underperforms the standard 3-layer model while taking ~1.8× longer. More parameters do not help if the optimization schedule is mismatched.
+
+**Generated Sample (71.8% Acc):**
+> `Once there was a big such a good. The boat wanted to play with the box. He should tees. She house, so he could do not see the boat. He said the might for a moment. He saw a safe, and the bell keep was still`
+
+### 16. Large Batch + High LR (3 Layers, 2048 batch)
+**The Experiment:** Instead of making the model bigger, we doubled the **batch size** from 1024 → 2048 and scaled the **learning rate** from 1e-3 → 2e-3 to match. The model architecture stayed the same as the standard 3-layer winner.
+
+```python
+# --- Hyperparameters for Large Batch + High LR ---
+context_size = 8
+embed_dim    = 256
+n_heads      = 4
+ffn_dim      = 1024
+n_layers     = 3
+batch_size   = 2048      # DOUBLED
+lr           = 2e-3      # DOUBLED to match larger batch
+n_steps      = 2201
+```
+
+```
+params: 2,404,160
+Step    0 | Loss: 4.7300 | Acc: 19.3% |  0.1s
+Step  200 | Loss: 1.3693 | Acc: 58.0% |  8.3s
+Step  400 | Loss: 1.2690 | Acc: 60.8% | 16.4s
+Step  600 | Loss: 1.1901 | Acc: 63.9% | 24.8s
+Step  800 | Loss: 1.0649 | Acc: 66.9% | 33.4s
+Step 1000 | Loss: 1.0645 | Acc: 68.4% | 41.8s
+Step 1200 | Loss: 0.9888 | Acc: 68.6% | 49.9s
+Step 1400 | Loss: 0.9734 | Acc: 70.4% | 58.0s
+Step 1600 | Loss: 0.8850 | Acc: 71.0% | 66.1s
+Step 1800 | Loss: 0.8706 | Acc: 72.8% | 74.3s
+Step 2000 | Loss: 0.8693 | Acc: 72.3% | 82.4s
+Step 2200 | Loss: 0.8584 | Acc: 76.1% | 90.7s
+Training time: 90.7s
+```
+
+**Result:** This produced a new best TinyTransformer result: **76.1% at step 2200**, beating the standard 3-layer model by +2.6% and the standard 4-layer model by +3.0%. The curve is a bit noisy in the final stretch (72.8 → 72.3 → 76.1), but the final jump is decisive. Text quality is also noticeably better: coherent names, dialogue, and far fewer broken words.
+
+**The Takeaway:** For this dataset, **more data per step mattered more than more parameters**. Doubling the batch and LR gave the optimizer a better estimate of the gradient and unlocked a major accuracy jump without changing the architecture. The tradeoff is speed: **90.7s** is much slower than the standard 3-layer run (~33s), but if your goal is best TinyTransformer quality rather than best speed/accuracy ratio, this is the new champion.
+
+**Generated Sample (76.1% Acc):**
+> `Once there was a little girl named Lily. She saw the new toy. He liked to play with her mom smiled and said, "Hello, Spot saw Tom was very happy with the cake was so smaller saw a big that she was happy`
 
 ---
 
