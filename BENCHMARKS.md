@@ -1,6 +1,6 @@
 # AI Lab Notebook: Training Tiny Language Models
 
-This file tracks our training experiments on character-level language models trained on the **TinyStories** dataset. 
+This file tracks our training experiments on character-level language models trained on the **TinyStories** dataset.
 
 Our baseline model is **TinyTransformer.py** (a 2-layer transformer, float16 precision, ReLU activation, learned positional embeddings, and a context size of 8 characters). All runs use a standard Google Colab T4 GPU.
 
@@ -37,7 +37,7 @@ Every entry below changes **only one thing at a time**. This is the scientific m
 | TinyTransformer.py (4 layers) | 73.1% | 3400 | 79.9s |
 | TinyTransformer.py (3 layers) | 73.5% | 2200 | ~33s |
 | TinyTransformer.py (3 layers, batch=1536, lr=2e-3) | 75.2% | 2200 | 75.3s |
-| TinyTransformer.py (3 layers, batch=2048, lr=2e-3) | 76.1% | 2200 | 90.7s |
+| **TinyTransformer.py (3 layers, batch=2048, lr=2e-3)** 🥇 | **76.1%** | **2200** | **90.7s** |
 | microgpt_lite.py | 79.4% | 3500 | 202.0s |
 
 ---
@@ -463,6 +463,9 @@ Numbers are great, but what does the AI actually write? Here are samples from ou
 
 **TinyTransformer.py - 4 Layers, 3400 steps (73.1% Acc - Grammatically solid!)**
 > `Once there was a little girl named Sam. Sam was so happy and started to play with the camera. They made a big hill and the birds fly something shine and saw a big tree.`
+
+**TinyTransformer.py - 3 Layers, batch=2048, lr=2e-3 (76.1% Acc - New champion!)**
+> `Once there was a little girl named Lily. She saw the new toy. He liked to play with her mom smiled and said, "Hello, Spot saw Tom was very happy with the cake was so smaller saw a big that she was happy`
 
 **microgpt_lite.py (79.4% Acc - Nearly perfect TinyStory)**
 > `Once upon a time, there was a little boy named Tim. He loved to measure his favorite toy. One day, he saw a big, deep broken shirt. He thought it would be fun to play with it.`
