@@ -1,164 +1,100 @@
-# TinyLM
+# 🤖 TinyLM: Build Your Own Mini AI
 
-TinyLM is a small character-level language modeling playground.
+TinyLM is a hands-on playground for building and training small, character-level language models from scratch. Instead of guessing whole words like ChatGPT, these models learn to guess the *next letter* in a sentence.
 
-> Follows on from [MLP-Digits-Classifier](https://github.com/eniompw/MLP-Digits-Classifier), extending multi-class neural networks from image classification to character-level language modeling.
+> 🧠 **Prerequisite:** Check out [MLP-Digits-Classifier](https://github.com/eniompw/MLP-Digits-Classifier) first to see how neural networks classify images. TinyLM takes those same concepts and applies them to generating text!
 >
-> This series continues with [MicroGPT](https://github.com/eniompw/MicroGPT), where the character-level model is scaled up to a decoder-only transformer.
+> 🚀 **What's Next?** This series continues with [MicroGPT](https://github.com/eniompw/MicroGPT), where we scale up to a full, modern decoder-only transformer.
 
-It contains seven compact implementations that train character-level models and generate text autoregressively:
+The code is intentionally kept short so you can read the entire training and text-generation process in one sitting.
 
-- a NumPy single-layer perceptron baseline for names generation
-- a CuPy character MLP with learned embeddings
-- a PyTorch character MLP equivalent to `TinyMLP.py`
-- a simplified PyTorch transformer encoder as a bridge between MLP and full transformer
-- a compact PyTorch transformer encoder language model
-- an OOP refactor of the transformer using `nn.Module`
-- a modern Llama-style transformer with RoPE, RMSNorm, SiLU, and `torch.compile`
+---
 
-The code is intentionally short so you can read end-to-end training and sampling in one sitting.
+## 📚 The Evolution of Our Models (7 Steps to AI)
 
-## Contents
+We didn't start with a complex AI. We built up to it, upgrading the model step-by-step. Each model here is an **experiment**—we change one major thing to see if it makes the AI smarter or faster.
 
-- [Repository contents](#repository-contents)
-- [Models](#models)
-- [Requirements](#requirements)
-- [Benchmarks](#benchmarks)
-- [Dataset](#dataset)
-- [Suggested next improvements](#suggested-next-improvements)
+### Level 1: The Basics (Predicting Letters)
+*   **1. `NameSLP.py` (The NumPy Baseline):** A super simple model written in raw NumPy. It looks at 6 letters and guesses the next one to make up fake names (like "Emma" or "Oliver"). 
+*   **2. `TinyMLP.py` (The CuPy MLP):** We upgrade to a Multi-Layer Perceptron (MLP) using CuPy (for GPU speed). We also give it "learned embeddings"—a cheat sheet that helps it understand letters.
+*   **3. `TorchMLP.py` (The PyTorch MLP):** The exact same model as #2, but rewritten in PyTorch. This lets us use PyTorch's "autograd" (automatic gradient calculator) so we don't have to do the hard math by hand!
 
-## Repository contents
+### Level 2: Enter the Transformer (The "Brain" Upgrade)
+*   **4. `SimpleTransformer.py` (The Bridge):** We take our PyTorch MLP and add a 2-layer Transformer Encoder. This gives the AI "attention"—the ability to look at the context of a whole sentence, not just the letter right before it.
+*   **5. `TinyTransformer.py` (The Workhorse):** This is our baseline model for all the experiments in the `BENCHMARKS.md` file! We add fancy speed tricks like mixed precision (using smaller numbers to calculate faster) and cosine learning rates.
+*   **6. `TinyTransformerClass.py` (The Cleanup):** The exact same model as #5, but we organize the code using Object-Oriented Programming (OOP). This makes the code look like standard, professional PyTorch.
 
-| File | Description |
-|------|-------------|
-| [README.md](README.md) | Project overview, model summaries, requirements, and roadmap |
-| [LICENSE](LICENSE) | Repository license |
-| [BENCHMARKS.md](BENCHMARKS.md) | Training snapshots and generated sample comparisons |
-| [TODO.md](TODO.md) | Task list and planned follow-ups |
-| [NameSLP.py](NameSLP.py) | NumPy single-layer perceptron trained on character windows from the names dataset |
-| [names_dataset.py](names_dataset.py) | Karpathy names data loader with character encoding and one-hot context features |
-| [TinyMLP.py](TinyMLP.py) | CuPy character MLP with a learned embedding table and one hidden layer |
-| [TinyMLP-explained.md](TinyMLP-explained.md) | Walkthrough of `TinyMLP.py` including data flow, tensor shapes, and manual gradient steps |
-| [tinystories_dataset.py](tinystories_dataset.py) | Shared TinyStories data loader and character-level preprocessing utility |
-| [TorchMLP.py](TorchMLP.py) | PyTorch equivalent of `TinyMLP.py` using autograd and the same core architecture |
-| [TorchMLP.ipynb](TorchMLP.ipynb) | Notebook version of `TorchMLP.py` |
-| [SimpleTransformer.py](SimpleTransformer.py) | Simplified PyTorch transformer — same structure as `TorchMLP.py` but with token + positional embeddings and a 2-layer transformer encoder |
-| [SimpleTransformer.ipynb](SimpleTransformer.ipynb) | Notebook version of `SimpleTransformer.py` |
-| [SimpleTransformer-explained.md](SimpleTransformer-explained.md) | Walkthrough of `SimpleTransformer.py` including architecture choices and the bridge from MLP to full transformer |
-| [TinyTransformer.py](TinyTransformer.py) | PyTorch character-level transformer encoder with token + positional embeddings, mixed precision, and autoregressive sampling |
-| [TinyTransformer-explained.md](TinyTransformer-explained.md) | Walkthrough of `TinyTransformer.py` including architecture choices, training flow, and speed/quality optimization notes |
-| [TinyTransformerClass.py](TinyTransformerClass.py) | OOP refactor of `TinyTransformer.py` wrapping the model in an `nn.Module` class with a `get_batch()` helper function |
-| [TinyLlama.py](TinyLlama.py) | Modern Llama-style transformer with RoPE, RMSNorm, SiLU, fused AdamW, mixed precision, and `torch.compile` |
+### Level 3: Modern AI (Llama Architecture)
+*   **7. `TinyLlama.py` (The Modern Era):** We rebuild the model using the exact same architecture tricks used in Meta's Llama models. We swap old math for new math: **RoPE** (a smarter way to understand word order), **RMSNorm** (better stabilization), and **SiLU** (a better activation function). We also use `torch.compile` to double the GPU speed.
 
-## Models
+---
 
-### 1) `NameSLP.py` (NumPy SLP baseline)
+## 📁 Repository Contents
 
-- Uses context windows of length 6 (`context_size`).
-- Loads names data via `load_names(...)` from `names_dataset.py`.
-- Trains a single linear softmax classifier with gradient descent.
-- Uses one-hot flattened context features from the names dataset.
-- Prints periodic training accuracy and samples generated character sequences.
+| File | What it does |
+| :--- | :--- |
+| `README.md` | You are here! Project overview and guide. |
+| `BENCHMARKS.md` | **The Lab Notebook!** Track our experiments, ablations, and accuracy results. |
+| `TODO.md` | Task list and planned follow-ups. |
+| `LICENSE` | Repository license. |
+| **Datasets & Loaders** | |
+| `names_dataset.py` | Loads the names dataset for `NameSLP.py`. |
+| `tinystories_dataset.py` | Loads the TinyStories dataset for all other models. |
+| **The Models** | |
+| `NameSLP.py` | NumPy single-layer perceptron. |
+| `TinyMLP.py` | CuPy character MLP. |
+| `TorchMLP.py` | PyTorch character MLP. |
+| `SimpleTransformer.py` | Simplified PyTorch transformer. |
+| `TinyTransformer.py` | PyTorch character transformer (Our Baseline). |
+| `TinyTransformerClass.py` | OOP refactor of the TinyTransformer. |
+| `TinyLlama.py` | Modern Llama-style transformer. |
+| **Explained Guides** | |
+| `TinyMLP-explained.md` | Walkthrough of `TinyMLP.py` (data flow, tensor shapes, gradients). |
+| `SimpleTransformer-explained.md` | Walkthrough of the bridge from MLP to Transformer. |
+| `TinyTransformer-explained.md` | Walkthrough of architecture choices and speed/quality optimization. |
 
-### 2) `TinyMLP.py` (CuPy character MLP)
+---
 
-- Uses context windows of length 4 (`context_size`).
-- Loads TinyStories data via `load_tinystories(...)` from `tinystories_dataset.py`.
-- Uses `num_stories=200` to choose how many streamed TinyStories records to train on.
-- Learns character embeddings, a ReLU hidden layer, and an output projection.
-- Streams 200 TinyStories samples.
-- Trains with manual forward/backward passes in CuPy using `float32` weights and mini-batches.
-- Uses vectorized embedding-gradient accumulation instead of a Python loop.
-- Generates text autoregressively from the trained model.
+## 💻 Requirements & Setup
 
-### 3) `TorchMLP.py` (PyTorch equivalent of `TinyMLP.py`)
+This project is designed to run on **Google Colab** using a free T4 GPU. 
 
-- Uses context windows of length 4 (`context_size`).
-- Loads TinyStories data via `load_tinystories(...)` from `tinystories_dataset.py`.
-- Uses `num_stories=200` to choose how many streamed TinyStories records to train on.
-- Uses the same embedding -> ReLU hidden -> output projection architecture as `TinyMLP.py`.
-- Trains with PyTorch autograd and SGD-style parameter updates.
-- Uses automatic device selection (`cuda` when available, otherwise `cpu`).
-- Generates text autoregressively from the trained model.
+**You will need:**
+*   Python 3.10+
+*   An internet connection (to download the datasets on the first run)
+*   Google Colab (or a local PC with an NVIDIA GPU)
 
-### 4) `SimpleTransformer.py` (simplified PyTorch transformer)
+**Python Packages:**
+*   `numpy` (for math)
+*   `cupy` (for GPU math in the early models)
+*   `datasets` (Hugging Face library to stream the TinyStories text)
+*   `torch` (PyTorch, for building the neural networks)
 
-- Uses context windows of length 8 (`context_size`).
-- Loads TinyStories data via `load_tinystories(...)` from `tinystories_dataset.py`.
-- Uses `num_stories=200` to choose how many streamed TinyStories records to train on.
-- Architecture: token embedding + positional embedding -> 2-layer transformer encoder -> output projection.
-- Trains with plain Adam and a fixed learning rate — no scheduler, no mixed precision.
-- Uses full-dataset eval (OOM-safe at 200 stories); swap to 4096-subset eval for larger datasets.
-- Designed as a teaching bridge between `TorchMLP.py` and `TinyTransformer.py`.
-- Generates text autoregressively with temperature-controlled sampling.
+*Note: `TorchMLP.py` and `SimpleTransformer.py` can run on a normal CPU if you don't have a GPU, but they will be much slower!*
 
-### 5) `TinyTransformer.py` (PyTorch character transformer)
+---
 
-- Uses context windows of length 8 (`context_size` / block size).
-- Loads TinyStories data via `load_tinystories(...)` from `tinystories_dataset.py`.
-- Uses `num_stories=1000` to choose how many streamed TinyStories records to train on.
-- Architecture: token embedding + positional embedding -> 2-layer transformer encoder -> output projection.
-- Trains with AdamW, gradient scaling, autocast mixed precision, gradient clipping, and cosine learning-rate decay.
-- Uses automatic device selection (`cuda` when available, otherwise `cpu`) via `torch.set_default_device(...)`.
-- Generates text autoregressively with temperature-controlled sampling.
+## 📖 The Datasets
 
-### 6) `TinyTransformerClass.py` (OOP refactor of `TinyTransformer.py`)
+We use two datasets to train our AI:
+1.  **`names.txt`**: A list of real names (from Andrej Karpathy's `makemore` project). Used to teach the AI how to spell names.
+2.  **TinyStories**: A dataset of simple, AI-generated children's stories (from Hugging Face). We use this to teach the AI how to write basic sentences. We look at the data **character by character**, keeping the project simple and educational.
 
-- Same architecture and training setup as `TinyTransformer.py`.
-- Wraps `tok_embed`, `pos_embed`, `transformer`, and `linear` in a `TinyTransformer(nn.Module)` class.
-- Exposes a `forward(x)` method, enabling standard PyTorch patterns such as `model.parameters()`.
-- Extracts batch sampling into a standalone `get_batch()` function.
-- Keeps all original comments, section headers, and training/generation logic unchanged.
+---
 
-### 7) `TinyLlama.py` (modern Llama-style transformer)
+## 🧪 From Code to Experiments
 
-- Uses context windows of length 256 (`context_size`).
-- Loads TinyStories data via `load_tinystories(...)` from `tinystories_dataset.py`.
-- Uses `num_stories=1000` to choose how many streamed TinyStories records to train on.
-- Architecture: token embedding -> 2-layer `ModernBlock` (RoPE, RMSNorm, SiLU MLP) -> weight-tied lm_head.
-- Replaces sinusoidal positional embeddings with Rotary Position Embeddings (RoPE).
-- Replaces LayerNorm with RMSNorm and GELU with SiLU activation.
-- Trains with fused AdamW, `GradScaler`, autocast float16, gradient clipping, and cosine LR decay.
-- Compiled with `torch.compile` for ~2x GPU kernel speedup.
-- Prints device info, param count, and elapsed time at each eval step.
-- Generates text autoregressively with temperature-controlled sampling.
+Once you understand how these 7 models are built, it's time to start experimenting! 
 
-## Requirements
+Head over to **[BENCHMARKS.md](BENCHMARKS.md)** to see what happens when we take the `TinyTransformer.py` baseline and run **experiments** (like adding layers or increasing memory) and **ablations** (like removing positional embeddings to see if the AI breaks). 
 
-- Python 3.10+
-- Internet connection for first dataset download
-- NVIDIA T4 GPU (Google Colab GPU runtime assumed)
+---
 
-Python packages:
+## 🚀 Suggested Next Improvements
 
-- `numpy`
-- `cupy`
-- `datasets`
-- `torch`
-
-Hardware notes:
-
-- `TinyMLP.py` uses CuPy, so it expects a compatible CUDA setup.
-- `TorchMLP.py` auto-selects `cuda` when available and otherwise runs on `cpu`.
-- `SimpleTransformer.py` auto-selects `cuda` when available; runs on CPU but is slower without GPU.
-- `TinyTransformer.py` is optimized for CUDA (`torch.compile`, AMP, fused AdamW) and is best run with a modern PyTorch + GPU setup.
-- `TinyTransformerClass.py` shares the same hardware requirements as `TinyTransformer.py`.
-- `TinyLlama.py` shares the same hardware requirements as `TinyTransformerClass.py`.
-
-## Benchmarks
-
-Training accuracy snapshots and generated sample comparisons are tracked in [BENCHMARKS.md](BENCHMARKS.md).
-
-## Dataset
-
-- Source: `names.txt` from `karpathy/makemore` (downloaded directly from GitHub).
-- Source: `karpathy/tinystories-gpt4-clean` via Hugging Face Datasets (streaming mode).
-- Helper loaders: `names_dataset.py` (for `NameSLP.py`) and `tinystories_dataset.py` (for `TinyMLP.py`, `TorchMLP.py`, `SimpleTransformer.py`, `TinyTransformer.py`, `TinyTransformerClass.py`, and `TinyLlama.py`).
-- Tokenization is character-level, keeping the project simple and educational.
-
-## Suggested next improvements
-
-- Add CPU/NumPy fallback to `TinyMLP.py` for non-CUDA environments.
-- Expose hyperparameters through command-line arguments.
-- Add checkpoint save/load support.
-- Add deterministic seeding and simple evaluation metrics.
+Want to keep tinkering? Here are some future experiments you could try:
+*   Add a CPU/NumPy fallback to `TinyMLP.py` so it runs without a GPU.
+*   Add command-line arguments so you can change hyperparameters without editing the code.
+*   Add a "Save/Load" feature so you don't have to retrain the model every time.
+*   Add deterministic seeding so you get the exact same results every time you run an experiment.
+```
