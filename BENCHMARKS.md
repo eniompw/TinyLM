@@ -4,7 +4,7 @@ This file tracks our training experiments on character-level language models tra
 
 Our baseline model is **TinyTransformer.py** (a 2-layer transformer, float16 precision, ReLU activation, learned positional embeddings, and a context size of 8 characters). All runs use a standard Google Colab T4 GPU.
 
-> ⚠️ **The Colab Lottery:** Google Colab assigns T4 GPUs from a shared pool. Sometimes you get a fast one, sometimes a slow one. Warm run times can vary from ~19.7s to ~27.3s. Always run your code at least twice to get a fair speed measurement!
+> ⚠️ **The Colab Lottery:** Google Colab assigns T4 GPUs from a shared pool. Sometimes you get a fast one, sometimes a slow one. Warm run times can vary from ~19.7s to ~27.3s. **Note: Larger batch sizes (e.g., 2048) exacerbate this variance—runtimes can swing from ~65s to ~90s depending on the assigned GPU's memory bandwidth.** Always run your code at least twice to get a fair speed measurement!
 
 ---
 
@@ -39,7 +39,7 @@ Before we dive in, here are two key scientific concepts we use to test AI models
 | TinyTransformer.py (4 layers) | 73.1% | 3400 | 79.9s |
 | TinyTransformer.py (3 layers) | 73.5% | 2200 | ~33s |
 | TinyTransformer.py (3 layers, batch=1536, lr=2e-3) | 75.2% | 2200 | 75.3s |
-| **TinyTransformer.py (3 layers, batch=2048, lr=2e-3)** 🥇 | **76.1%** | **2200** | **90.7s** |
+| **TinyTransformer.py (3 layers, batch=2048, lr=2e-3)** 🥇 | **76.1%** | **2200** | **~65–90s** |
 | microgpt_lite.py | 79.4% | 3500 | 202.0s |
 
 ---
@@ -201,7 +201,7 @@ Look at the 3-Layer model in Table 2. It hits 73.5% at step 2200, but drops to 7
 **15. Large Batch + High LR (3 Layers, 2048 batch)**
 *   **The Change:** Instead of making the model bigger, we doubled the **batch size** (data processed at once) from 1024 → 2048 and doubled the **learning rate** from 1e-3 → 2e-3 to match.
 *   **Result:** A new best TinyTransformer result: **76.1% at step 2200**, beating the standard 3-layer model by +2.6%. Text quality is noticeably better: coherent names, dialogue, and far fewer broken words.
-*   **The Takeaway:** For this dataset, **more data per step mattered more than more parameters**. Doubling the batch and LR gave the optimizer a better estimate of the gradient. The tradeoff is speed (90.7s), but if your goal is best quality, this is the champion.
+*   **The Takeaway:** For this dataset, **more data per step mattered more than more parameters**. Doubling the batch and LR gave the optimizer a better estimate of the gradient. The tradeoff is speed (expect ~1.7× slower than the 1024 batch run, averaging ~65–75s on a standard T4), but if your goal is best quality, this is the champion.
 
 **16. High LR Fast Convergence (3 Layers, 1024 batch)**
 *   **The Change:** Keep the high learning rate (2e-3) but revert the batch size back to 1024 for speed. 
