@@ -1,23 +1,36 @@
 # 🤖 TinyLM: Build Your Own Mini AI
 
-TinyLM is a hands-on playground for building and training small, character-level language models from scratch. Instead of guessing whole words like ChatGPT, these models learn to guess the *next letter* in a sentence.
+TinyLM is a hands-on playground for building and training small, character-level language models from scratch. Instead of guessing whole words like ChatGPT, these models learn to guess the *next letter* in a sentence. 
+
+The code is intentionally kept short so you can read the entire training and text-generation process in one sitting.
 
 > 🧠 **Prerequisite:** Check out [MLP-Digits-Classifier](https://github.com/eniompw/MLP-Digits-Classifier) first to see how neural networks classify images. TinyLM takes those same concepts and applies them to generating text!
 >
 > 🚀 **What's Next?** This series continues with [MicroGPT](https://github.com/eniompw/MicroGPT), where we scale up to a full, modern decoder-only transformer.
 
-The code is intentionally kept short so you can read the entire training and text-generation process in one sitting.
+---
+
+## 🔬 The Science of AI: Experiments vs. Ablations
+
+In real AI research, you don't just write code and hope it works—you use the **Scientific Method**. As you build these models, you will be doing two types of scientific tests. Think of the AI model like a recipe or a custom PC build:
+
+*   **🧪 Experiments (Upgrading):** Trying a *new feature* or *upgrading a setting* to see if it makes the model better. 
+    *   *Example:* "What if we add more layers to the model's brain?" or "What if we double the memory?"
+*   **✂️ Ablations (Removing):** Taking an existing feature *away* to prove that it's actually necessary. If the model gets worse, you've proven that feature matters!
+    *   *Example:* "What if we remove the model's ability to know the order of words?" (Spoiler: It turns into word soup). 
+
+Head over to **[BENCHMARKS.md](BENCHMARKS.md)** after reading this to see the actual results of our experiments and ablations!
 
 ---
 
-## 📚 The Evolution of Our Models (7 Steps to AI)
+## 📚 The Evolution of Our Models (Leveling Up)
 
 We didn't start with a complex AI. We built up to it, upgrading the model step-by-step. Each model here is an **experiment**—we change one major thing to see if it makes the AI smarter or faster.
 
 ### Level 1: The Basics (Predicting Letters)
 *   **1. `NameSLP.py` (The NumPy Baseline):** A super simple model written in raw NumPy. It looks at 6 letters and guesses the next one to make up fake names (like "Emma" or "Oliver"). 
 *   **2. `TinyMLP.py` (The CuPy MLP):** We upgrade to a Multi-Layer Perceptron (MLP) using CuPy (for GPU speed). We also give it "learned embeddings"—a cheat sheet that helps it understand letters.
-*   **3. `TorchMLP.py` (The PyTorch MLP):** The exact same model as #2, but rewritten in PyTorch. This lets us use PyTorch's "autograd" (automatic gradient calculator) so we don't have to do the hard math by hand!
+*   **3. `TorchMLP.py` (The PyTorch MLP):** The exact same model as #2, but rewritten in PyTorch. This lets us use PyTorch's "autograd" (automatic gradient calculator) so we don't have to do the hard calculus by hand!
 
 ### Level 2: Enter the Transformer (The "Brain" Upgrade)
 *   **4. `SimpleTransformer.py` (The Bridge):** We take our PyTorch MLP and add a 2-layer Transformer Encoder. This gives the AI "attention"—the ability to look at the context of a whole sentence, not just the letter right before it.
@@ -79,14 +92,6 @@ This project is designed to run on **Google Colab** using a free T4 GPU.
 We use two datasets to train our AI:
 1.  **`names.txt`**: A list of real names (from Andrej Karpathy's `makemore` project). Used to teach the AI how to spell names.
 2.  **TinyStories**: A dataset of simple, AI-generated children's stories (from Hugging Face). We use this to teach the AI how to write basic sentences. We look at the data **character by character**, keeping the project simple and educational.
-
----
-
-## 🧪 From Code to Experiments
-
-Once you understand how these 7 models are built, it's time to start experimenting! 
-
-Head over to **[BENCHMARKS.md](BENCHMARKS.md)** to see what happens when we take the `TinyTransformer.py` baseline and run **experiments** (like adding layers or increasing memory) and **ablations** (like removing positional embeddings to see if the AI breaks). 
 
 ---
 
