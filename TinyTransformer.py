@@ -3,24 +3,26 @@ import torch.nn as nn, torch.nn.functional as F
 #from tinystories_dataset import load_tinystories
 
 # Automatically create all tensors on GPU if available, removing manual device boilerplate
-torch.set_default_device('cuda' if torch.cuda.is_available() else 'cpu')
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+torch.set_default_device(device)
 
-# --- Hyperparameters ---
+# --- Hyperparameters (Middle Ground: 3 layers, batch=1536, lr=2e-3) ---
 context_size = 8                                                                                  # number of previous tokens used to predict next
 embed_dim    = 256                                                                                # token/positional embedding dimension (d_model)
 n_heads      = 4                                                                                  # number of attention heads in each transformer layer
 ffn_dim      = 1024                                                                               # feed-forward network hidden dimension
-n_layers     = 2                                                                                  # number of transformer encoder layers
-batch_size   = 1024                                                                               # number of samples per training step
-lr           = 1e-3                                                                               # initial learning rate
-n_steps      = 2001                                                                               # total training steps
+n_layers     = 3                                                                                  # 3 layers is the sweet spot for depth vs speed
+batch_size   = 1536                                                                               # halfway between 1024 and 2048 for the 1-min time budget
+lr           = 2e-3                                                                               # high learning rate to match the larger batch
+n_steps      = 2401                                                                               # stop at ⭐ peak (overfitting starts ~2400)
 
 # --- Data & Tokenization ---
 input_ids, target_ids, idx_to_char, token_ids = load_tinystories(num_stories=1000, context_size=context_size) # previous chars to predict next
 input_ids, target_ids = torch.tensor(input_ids), torch.tensor(target_ids)                        # convert to tensors
 
 # --- Model ---
-torch.manual_seed(42)                                                                             # seed helper for reproducibility
+torch.manual_seed(0)                                                                             # seed helper for reproducibility
+eval_rng = torch.Generator(device=device).manual_seed(0)                                          # FIXED: Dedicated GPU generator to eliminate accuracy noise!
 tok_embed = nn.Embedding(len(idx_to_char), embed_dim)                                            # token embedding lookup layer
 pos_embed = nn.Embedding(context_size, embed_dim)                                                # positional embedding for sequence order
 transformer = torch.compile(nn.TransformerEncoder(nn.TransformerEncoderLayer(embed_dim, n_heads, ffn_dim, batch_first=True, dropout=0., norm_first=True), n_layers))
@@ -44,7 +46,7 @@ for step in range(n_steps):
 
     if step % 200 == 0:
         with torch.no_grad(), torch.autocast('cuda', dtype=torch.float16):                       # disable tracking during evaluation
-            eval_idx = torch.randint(0, len(input_ids), (4096,))                                 # subset evaluation to prevent GPU OOM
+            eval_idx = torch.randint(0, len(input_ids), (4096,), generator=eval_rng)             # FIXED eval subset to prevent accuracy wobble
             x_eval = tok_embed(input_ids[eval_idx]) + pos_embed(torch.arange(context_size))     # embed dataset subset
             pred_ids = linear(transformer(x_eval)[:, -1, :]).argmax(1)                          # dataset subset forward & argmax
             print(f"Step {step:4d} | Loss: {loss:.4f} | Acc: {(pred_ids == target_ids[eval_idx]).float().mean():.1%} | {time.time()-start:.1f}s")
