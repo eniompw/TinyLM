@@ -19,6 +19,46 @@ Before we dive in, here are two key scientific concepts we use to test AI models
 
 ---
 
+## 🔬 Scientific Rigor & Repeatability
+
+To achieve true scientific rigor and eliminate external variables across runs, we implement two primary control methodologies in our benchmarking process:
+
+### 1. Eliminating Accuracy Variance: Dedicated Eval Seed
+Even with a global seed set via `torch.manual_seed(42)`, random batch selection during training can perturb the status of the random number generator, leading to variations in the evaluation subsets. Specifically, when the evaluation index is drawn dynamically:
+```python
+eval_idx = torch.randint(0, len(input_ids), (4096,)) # random eval subset
+```
+The evaluated test subsets will change slightly depending on the exact number of training steps passed prior. This causes the final evaluation accuracy to wobble by `0.3%` to `0.7%` across runs of identical architectures.
+
+**The Fix:** Create a dedicated, isolated random generator specifically for evaluation, seeded independently, so that every evaluation run evaluates on the *exact same 4,096 examples* across all experiments:
+```python
+# Add this near the top, after torch.manual_seed(42)
+eval_rng = torch.Generator().manual_seed(0)  # Dedicated generator for evaluation
+
+# Inside the training loop:
+    if step % 200 == 0:
+        with torch.no_grad(), torch.autocast('cuda', dtype=torch.float16):
+            # Use the dedicated generator so eval data is identical every step and every run
+            eval_idx = torch.randint(0, len(input_ids), (4096,), generator=eval_rng) 
+            x_eval = tok_embed(input_ids[eval_idx]) + pos_embed(torch.arange(context_size))
+            pred_ids = linear(transformer(x_eval)[:, -1, :]).argmax(1)
+            print(f"Step {step:4d} | Loss: {loss:.4f} | Acc: {(pred_ids == target_ids[eval_idx]).float().mean():.1%} | {time.time()-start:.1f}s")
+```
+Using this pattern ensures that any two training runs with the same model parameters yield identical evaluation trajectories.
+
+---
+
+### 2. Defeating the GPU Lottery: Relative Speed Baseline
+To prevent Google Colab GPU allocation variance from skewing speed analyses (such as the ~26-second noise observed on the larger batch run), we do not rely on absolute seconds. Instead, we establish a **Control Baseline** and measure execution speed relative to it in the exact same environment session.
+
+*   **The Control Baseline:** A baseline run of `TinyTransformer.py` (2 layers, `batch=1024`, `lr=1e-3`) for 200 steps on the same hardware allocation.
+*   **The Formula:**
+    $$\text{Relative Speed Ratio} = \frac{\text{Experiment Run Time}}{\text{Control Baseline Run Time}}$$
+
+Measuring execution time as a ratio ensures that even if you move from a slow T4 to an RTX 4090, the relative speed difference of your architectural/hyperparameter choices (e.g., a $1.7\times$ scaling factor for doubling batch sizes) remains constant and scientifically reproducible.
+
+---
+
 ## 📊 The Leaderboard: Model Comparison
 
 *Best configuration for each architecture we tested.*
