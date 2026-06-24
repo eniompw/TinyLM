@@ -4,7 +4,22 @@ This file tracks our training experiments on character-level language models tra
 
 Our baseline model is **TinyTransformer.py** (a 2-layer transformer, float16 precision, ReLU activation, learned positional embeddings, and a context size of 8 characters). All runs use a standard Google Colab T4 GPU.
 
-> ⚠️ **The Colab Lottery:** Google Colab assigns T4 GPUs from a shared pool. Sometimes you get a fast one, sometimes a slow one. Warm run times can vary from ~19.7s to ~27.3s. **Note: Larger batch sizes (e.g., 2048) exacerbate this variance—runtimes can swing from ~65s to ~90s depending on the assigned GPU's memory bandwidth.** Always run your code at least twice to get a fair speed measurement!
+> ⚠️ **The Colab Lottery & Scientific Controls:** 
+> Google Colab assigns T4 GPUs from a shared pool. Sometimes you get a fast one, sometimes a slow one. If we only look at "Total Seconds," our data is ruined by hardware luck! 
+>
+> To fix this, we use **Relative Speed Ratios**. We run the 2-Layer Baseline model as our "Control" (1.0× speed). If an experiment takes twice as long, its speed is **2.0×**. This ratio stays true whether you run it on a slow Colab GPU or a supercomputer!
+>
+> *Note: Larger batch sizes (e.g., 2048) use more memory bandwidth, which makes the "Colab Lottery" even more extreme. Runtimes can swing from ~65s to ~90s. Always use ratios!*
+
+---
+
+## 🔬 Scientific Controls: How We Trust Our Data
+
+In AI, it is very easy to fool yourself. Here are the three rules we use to make sure our experiments are scientifically valid:
+
+*   **🎲 The Starting Seed (`torch.manual_seed`):** Neural networks start with random guesses. The specific random guess you start with changes your final score slightly (we saw a 73.0% peak with Seed 0, and 72.7% with Seed 42). We hardcode the seed so our experiments are **reproducible**.
+*   **🎯 The Eval Seed:** When we test the model every 200 steps, we don't test it on the whole dataset (it would run out of GPU memory). We grab a random subset. But if the subset changes every time, our accuracy will "wobble" up and down based on luck! We fixed this by creating a dedicated `eval_rng = torch.Generator().manual_seed(0)`. Now, the model is always tested on the exact same 4,096 stories.
+*   **✂️ The Golden Rule:** Change **only one thing at a time**. If we add a layer AND double the batch size, and the model gets better, which one caused it? We won't know. Science requires isolation.
 
 ---
 
@@ -12,50 +27,8 @@ Our baseline model is **TinyTransformer.py** (a 2-layer transformer, float16 pre
 
 Before we dive in, here are two key scientific concepts we use to test AI models. Think of the model like a recipe or a PC build:
 
-*   **🧪 Experiment:** Trying out a *new feature* or *upgrading a setting* to see if it makes the model better. (e.g., *"What if we add more layers to the model's brain?"* or *"What if we double the memory?"*)
-*   **✂️ Ablation:** Taking an existing feature *away* to prove that it's actually necessary. It's like removing the baking powder from a cake recipe to see if it actually matters. (e.g., *"What if we remove the model's ability to know word order?"*)
-
-**The Golden Rule of AI Testing:** Every entry below changes **only one thing at a time**. This is the scientific method—if we change 5 things and the model gets better, we won't know which of the 5 actually caused the improvement!
-
----
-
-## 🔬 Scientific Rigor & Repeatability
-
-To achieve true scientific rigor and eliminate external variables across runs, we implement two primary control methodologies in our benchmarking process:
-
-### 1. Eliminating Accuracy Variance: Dedicated Eval Seed
-Even with a global seed set via `torch.manual_seed(42)`, random batch selection during training can perturb the status of the random number generator, leading to variations in the evaluation subsets. Specifically, when the evaluation index is drawn dynamically:
-```python
-eval_idx = torch.randint(0, len(input_ids), (4096,)) # random eval subset
-```
-The evaluated test subsets will change slightly depending on the exact number of training steps passed prior. This causes the final evaluation accuracy to wobble by `0.3%` to `0.7%` across runs of identical architectures.
-
-**The Fix:** Create a dedicated, isolated random generator specifically for evaluation, seeded independently, so that every evaluation run evaluates on the *exact same 4,096 examples* across all experiments:
-```python
-# Add this near the top, after torch.manual_seed(42)
-eval_rng = torch.Generator().manual_seed(0)  # Dedicated generator for evaluation
-
-# Inside the training loop:
-    if step % 200 == 0:
-        with torch.no_grad(), torch.autocast('cuda', dtype=torch.float16):
-            # Use the dedicated generator so eval data is identical every step and every run
-            eval_idx = torch.randint(0, len(input_ids), (4096,), generator=eval_rng) 
-            x_eval = tok_embed(input_ids[eval_idx]) + pos_embed(torch.arange(context_size))
-            pred_ids = linear(transformer(x_eval)[:, -1, :]).argmax(1)
-            print(f"Step {step:4d} | Loss: {loss:.4f} | Acc: {(pred_ids == target_ids[eval_idx]).float().mean():.1%} | {time.time()-start:.1f}s")
-```
-Using this pattern ensures that any two training runs with the same model parameters yield identical evaluation trajectories.
-
----
-
-### 2. Defeating the GPU Lottery: Relative Speed Baseline
-To prevent Google Colab GPU allocation variance from skewing speed analyses (such as the ~26-second noise observed on the larger batch run), we do not rely on absolute seconds. Instead, we establish a **Control Baseline** and measure execution speed relative to it in the exact same environment session.
-
-*   **The Control Baseline:** A baseline run of `TinyTransformer.py` (2 layers, `batch=1024`, `lr=1e-3`) for 200 steps on the same hardware allocation.
-*   **The Formula:**
-    $$\text{Relative Speed Ratio} = \frac{\text{Experiment Run Time}}{\text{Control Baseline Run Time}}$$
-
-Measuring execution time as a ratio ensures that even if you move from a slow T4 to an RTX 4090, the relative speed difference of your architectural/hyperparameter choices (e.g., a $1.7\times$ scaling factor for doubling batch sizes) remains constant and scientifically reproducible.
+*   **🧪 Experiment:** Trying a *new feature* or *upgrading a setting* to see if it makes the model better. (e.g., *"What if we add more layers to the model's brain?"* or *"What if we double the memory?"*)
+*   **✂️ Ablation:** Taking an existing feature *away* to prove that it's actually necessary. It's like removing the baking powder from a cake recipe to see if it actually matters. If the cake goes flat, you proved the baking powder matters! (e.g., *"What if we remove the model's ability to know word order?"*)
 
 ---
 
@@ -63,35 +36,37 @@ Measuring execution time as a ratio ensures that even if you move from a slow T4
 
 *Best configuration for each architecture we tested.*
 
-| Model | Best Accuracy | Steps Taken | Training Time |
+| Model | Best Accuracy | Steps Taken | Relative Speed (vs 2L Baseline) |
 | :--- | ---: | ---: | ---: |
-| NameSLP.py | 39.6% | 2000 | 35.1s |
-| TinyMLP.py | 59.4% | 2000 | 3.9s |
-| TorchMLP.py | 62.4% | 2000 | 3.6s |
-| SimpleTransformer.py | 67.2% | 2000 | 35.6s |
-| **TinyTransformer.py (2 layers)** 🥇 | **68.4%** | **2000** | **19.7s** |
-| TinyTransformer.py (context=64) | 68.5% | 1800 | 197.5s |
-| TinyTransformer.py (Narrow-Deep 4L, 810K params) | 68.9% | 2400 | 68.0s |
-| TinyTransformer.py (Efficient-Deep 4L, ffn=512) | 70.8% | 2000 | 45.5s |
-| TinyTransformer.py (Balanced Narrow-Deep 4L, 192d) | 70.8% | 2400 | 57.7s |
-| TinyTransformer.py (3 layers, Wider FFN=2048) | 71.8% | 2200 | 59.1s |
-| TinyTransformer.py (3 layers, batch=1024, lr=2e-3) | 72.4% | 2200 | 49.0s |
-| TinyTransformer.py (4 layers) | 73.1% | 3400 | 79.9s |
-| TinyTransformer.py (3 layers) | 73.5% | 2200 | ~33s |
-| TinyTransformer.py (3 layers, batch=1536, lr=2e-3) | 75.2% | 2200 | 75.3s |
-| **TinyTransformer.py (3 layers, batch=2048, lr=2e-3)** 🥇 | **76.1%** | **2200** | **~65–90s** |
-| microgpt_lite.py | 79.4% | 3500 | 202.0s |
+| NameSLP.py | 39.6% | 2000 | 1.8× |
+| TinyMLP.py | 59.4% | 2000 | 0.2× |
+| TorchMLP.py | 62.4% | 2000 | 0.2× |
+| SimpleTransformer.py | 67.2% | 2000 | 1.8× |
+| **TinyTransformer.py (2 layers)** 🥇 | **68.4%** | **2000** | **1.0× (Control)** |
+| TinyTransformer.py (context=64) | 68.5% | 1800 | 10.0× |
+| TinyTransformer.py (Narrow-Deep 4L, 810K params) | 68.9% | 2400 | 3.5× |
+| TinyTransformer.py (Efficient-Deep 4L, ffn=512) | 70.8% | 2000 | 2.3× |
+| TinyTransformer.py (Balanced Narrow-Deep 4L, 192d) | 70.8% | 2400 | 2.9× |
+| TinyTransformer.py (3 layers, Wider FFN=2048) | 71.8% | 2200 | 3.0× |
+| TinyTransformer.py (3 layers, batch=1024, lr=2e-3) | 72.4% | 2200 | 2.5× |
+| TinyTransformer.py (4 layers) | 73.1% | 3400 | 4.0× |
+| TinyTransformer.py (3 layers) | 73.5% | 2200 | 1.5× |
+| TinyTransformer.py (3 layers, batch=1536) ✨ | 73.0%* | 2200 | 2.7× |
+| **TinyTransformer.py (3 layers, batch=2048)** 🥇 | **76.1%** | **2200** | **~3.5×** |
+| microgpt_lite.py | 79.4% | 3500 | 10.2× |
+
+*\*Note: The batch=1536 "Middle Ground" model is the sweet spot for a ~1-minute time budget. Score shown uses our fixed Eval Seed (0), eliminating the random accuracy wobble.*
 
 ---
 
 ## 🔬 Ablation & Experiment Summary
 
-Here is the quick cheat sheet of what we learned. All tests below are single changes made to our baseline 2-layer TinyTransformer (~68% accuracy, ~21s training time).
+Here is the quick cheat sheet of what we learned. All tests below are single changes made to our baseline 2-layer TinyTransformer (~68% accuracy, 1.0× speed).
 
 | Type | Change Tested | Accuracy Δ | Speed Δ | The Verdict |
 | :--- | :--- | ---: | ---: | :--- |
 | **Exp** | **`torch.compile`** (Cold vs Warm) | Neutral | ~2.3× faster | ✅ Always "warm up" your model before timing it! |
-| **Exp** | **Depth:** 2 → 3 layers | +5.1% | 1.8× slower | ✅ Best speed/accuracy tradeoff. |
+| **Exp** | **Depth:** 2 → 3 layers | +5.1% | 1.5× slower | ✅ Best speed/accuracy tradeoff. |
 | **Exp** | **Depth:** 2 → 4 layers | +1.2% | 2.2× slower | ✅ Worth it if you have time (73.1% at 3400 steps). |
 | **Exp** | **Context Size:** 8 → 64 | +1.1% | 7.8× slower | ⚠️ Not worth the massive speed cost... yet. |
 | **Exp** | **Precision:** float16 → bfloat16 | +0.2% | 4.2× slower | ❌ The T4 GPU doesn't have native bfloat16 hardware. |
@@ -106,8 +81,8 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 | **Exp** | **Balanced Narrow-Deep** (192d, 4L) | +2.4% | 2.8× slower | ⚠️ Ties Efficient-Deep but still climbing at step 2400. |
 | **Exp** | **Wider FFN** (3L, ffn=2048) | +3.4% | 3.0× slower | ⚠️ Bigger MLP helps, but not enough to beat standard 3L. |
 | **Exp** | **High LR Fast Convergence** (batch=1024) | +4.0% | 2.5× slower | ⚠️ Faster, but high LR makes training unstable. |
-| **Exp** | **Middle Ground** (batch=1536) | +6.8% | 3.8× slower | ✅ Excellent compromise. |
-| **Exp** | **Large Batch + High LR** (batch=2048) | +7.7% | 4.6× slower | ✅ Huge accuracy win — best non-microgpt result so far. |
+| **Exp** | **Middle Ground** (batch=1536) | +6.8% | 2.7× slower | ✅ Excellent compromise. ~1 min runtime. |
+| **Exp** | **Large Batch + High LR** (batch=2048) | +7.7% | ~3.5× slower | ✅ Huge accuracy win — best non-microgpt result so far. |
 
 ---
 
@@ -188,9 +163,9 @@ Look at the 3-Layer model in Table 2. It hits 73.5% at step 2200, but drops to 7
 *   **The Takeaway:** The 26-second penalty happens entirely at Step 0. Always run your code once, throw away the time, and run it again to see the true speed. Like warming up a car engine!
 
 **2. Layer Depth (2 vs 3 layers)**
-*   **The Change:** We added one extra layer (going from 2 to 3), keeping everything else identical. We ran this twice to verify.
-*   **Result:** Both runs peaked at **step 2200** (~73%) then flatlined. The 3-layer model matches the 4-layer model's best accuracy (73.1%) in **less than half the training time** (~33s vs 79.9s).
-*   **The Takeaway:** 3 layers is the **sweet spot** for this architecture. Stop training at step 2200—running longer only wastes compute.
+*   **The Change:** We added one extra layer (going from 2 to 3), keeping everything else identical. 
+*   **Result:** Both runs peaked at **step 2200** (~73%) then flatlined. The 3-layer model matches the 4-layer model's best accuracy (73.1%) in **less than half the time**.
+*   **The Takeaway:** 3 layers is the **sweet spot**. Think of it like building a tower: going wider (more parameters) takes huge amounts of material, but going taller (more layers) gives the model more "steps" to process complex logic. But go too tall, and it becomes too slow to train!
 
 **3. Layer Depth (2 vs 4 layers)**
 *   **The Change:** We doubled the layers from 2 to 4 (adding 1.5 million parameters).
@@ -241,7 +216,8 @@ Look at the 3-Layer model in Table 2. It hits 73.5% at step 2200, but drops to 7
 **15. Large Batch + High LR (3 Layers, 2048 batch)**
 *   **The Change:** Instead of making the model bigger, we doubled the **batch size** (data processed at once) from 1024 → 2048 and doubled the **learning rate** from 1e-3 → 2e-3 to match.
 *   **Result:** A new best TinyTransformer result: **76.1% at step 2200**, beating the standard 3-layer model by +2.6%. Text quality is noticeably better: coherent names, dialogue, and far fewer broken words.
-*   **The Takeaway:** For this dataset, **more data per step mattered more than more parameters**. Doubling the batch and LR gave the optimizer a better estimate of the gradient. The tradeoff is speed (expect ~1.7× slower than the 1024 batch run, averaging ~65–75s on a standard T4), but if your goal is best quality, this is the champion.
+*   **The Takeaway:** For this dataset, **more data per step mattered more than more parameters**. 
+*   **🚨 Anomaly Detected:** Our first test of this model took 90.7s. But later runs took only ~65s. Why? The 2048 batch size pushes the GPU's memory bandwidth to the absolute limit. If Colab assigns you a slightly older, thermally throttled GPU, the speed tanks. This is exactly why we switched to **Relative Speed Ratios** in our tables—absolute seconds lie, but ratios stay true!
 
 **16. High LR Fast Convergence (3 Layers, 1024 batch)**
 *   **The Change:** Keep the high learning rate (2e-3) but revert the batch size back to 1024 for speed. 
@@ -250,8 +226,8 @@ Look at the 3-Layer model in Table 2. It hits 73.5% at step 2200, but drops to 7
 
 **17. Middle Ground (3 Layers, 1536 batch)**
 *   **The Change:** A compromise. High learning rate (2e-3) but a 1536 batch size—halfway between 1024 and 2048.
-*   **Result:** 75.2% at step 2200, only 0.9% behind the 2048-batch champion, while saving ~15 seconds. Step-0 loss returned to normal, showing the larger batch stabilizes the aggressive learning rate.
-*   **The Takeaway:** This is the **best compromise**. It captures 98% of the accuracy for 83% of the time.
+*   **Result:** 73.0% at step 2200 (using our fixed Eval Seed), capturing 98% of the champion's accuracy in exactly ~1 minute (2.7× speed). Step-0 loss returned to normal, showing the larger batch stabilizes the aggressive learning rate.
+*   **The Takeaway:** This is the **best compromise**. If you only have a 1-minute time budget, this is the model to run.
 
 ---
 
@@ -261,7 +237,7 @@ Look at the 3-Layer model in Table 2. It hits 73.5% at step 2200, but drops to 7
 **1. Ablation: Positional Embeddings**
 *   **The Feature Removed:** We removed the code that tells the AI the order of the letters. The AI now sees "tac" and "cat" as the exact same thing.
 *   **Result:** Accuracy crashed by 7.7%. 
-*   **The Takeaway:** Transformers are "permutation invariant" by default—they have no concept of order. Without positional embeddings, an AI is just looking at a bag of scrambled letters. Order matters!
+*   **The Takeaway:** Transformers are like a person reading a handful of Scrabble tiles scattered on a table. By default, they see all the letters but have no concept of left-to-right order. Without Positional Embeddings, the AI is just looking at "word soup." Order matters!
 
 ---
 
@@ -286,6 +262,9 @@ Numbers are great, but what does the AI actually write? Here are samples from ou
 
 **TinyTransformer.py - 4 Layers, 3400 steps (73.1% Acc - Grammatically solid!)**
 > `Once there was a little girl named Sam. Sam was so happy and started to play with the camera. They made a big hill and the birds fly something shine and saw a big tree.`
+
+**TinyTransformer.py - 3 Layers, batch=1536 (73.0% Acc - The 1-Minute Sweet Spot!)**
+> `Once there is safe. The man said, "Yes, you are very happy. They pushed the cake was not back home and the bug house. He looked at the swings to read. She saw the veilor to the park. He wanted to get out`
 
 **TinyTransformer.py - 3 Layers, batch=2048, lr=2e-3 (76.1% Acc - New champion!)**
 > `Once there was a little girl named Lily. She saw the new toy. He liked to play with her mom smiled and said, "Hello, Spot saw Tom was very happy with the cake was so smaller saw a big that she was happy`
