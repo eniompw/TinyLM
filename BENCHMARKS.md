@@ -4,7 +4,33 @@ This file tracks our training experiments on character-level language models tra
 
 Our baseline model is **TinyTransformer.py** (a 2-layer transformer, float16 precision, ReLU activation, learned positional embeddings, and a context size of 8 characters). All runs use a standard Google Colab T4 GPU.
 
-> ⚠️ **The Colab Lottery & Scientific Controls:** 
+---
+
+## 📌 Contents
+
+- [🔬 The Scientific Method: How We Trust Our Data](#-the-scientific-method-how-we-trust-our-data)
+- [🧠 How to Read This Document](#-how-to-read-this-document)
+- [📊 The Leaderboard: Model Comparison](#-the-leaderboard-model-comparison)
+- [🔬 Ablation & Experiment Summary](#-ablation--experiment-summary)
+  - [🏗️ Architecture (Shape & Size)](#%EF%B8%8F-architecture-shape--size)
+  - [⚡ Training & Speed Hacks](#-training--speed-hacks)
+  - [🧠 The "Real Intelligence" Push (Batch, Context & Data)](#-the-real-intelligence-push-batch-context--data)
+- [📈 Step-by-Step Accuracy Data](#-step-by-step-accuracy-data)
+  - [Phase 1: The Baselines (Where we started)](#phase-1-the-baselines-where-we-started)
+  - [Phase 2: Shape & Size Tests (Does depth or width matter more?)](#phase-2-shape--size-tests-does-depth-or-width-matter-more)
+  - [Phase 3: The "Raw Score" Champions (Batch Size & Learning Rate)](#phase-3-the-raw-score-champions-batch-size--learning-rate)
+  - [Phase 4: The Real Intelligence Push (Generalization vs. Memorization)](#phase-4-the-real-intelligence-push-generalization-vs-memorization)
+- [📝 Experiment Details & Lessons Learned](#-experiment-details--lessons-learned)
+  - [🧪 EXPERIMENTS: Upgrading the Engine](#-experiments-upgrading-the-engine)
+    - [Phase 1: Architecture Tweaks](#phase-1-architecture-tweaks)
+    - [Phase 2: The Training Hacks](#phase-2-the-training-hacks)
+    - [Phase 3: The Coherence Push](#phase-3-the-coherence-push)
+  - [✂️ ABLATION: Proving What Matters](#%EF%B8%8F-ablation-proving-what-matters)
+- [📖 Generated Samples (Seeing is Believing)](#-generated-samples-seeing-is-believing)
+
+---
+
+> ⚠️ **The Colab Lottery & Scientific Controls:**  
 > Google Colab assigns T4 GPUs from a shared pool. Sometimes you get a fast one, sometimes a slow one. If we only look at "Total Seconds," our data is ruined by hardware luck! 
 > 
 > To fix this, we use **Relative Speed Ratios**. We run the 2-Layer Baseline model as our "Control" (1.0× speed). If an experiment takes twice as long, its speed is **2.0×**. This ratio stays true whether you run it on a slow Colab GPU or a supercomputer!
