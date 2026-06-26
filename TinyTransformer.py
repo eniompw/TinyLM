@@ -7,6 +7,7 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 torch.set_default_device(device)
 
 # --- Hyperparameters (Max Coherence: Context=32, Temp=0.5) ---
+num_stories  = 5000                                                                               # EXPANDED: 1000 -> 5000 stories for rich vocabulary and sentence variety
 context_size = 32                                                                                 # INCREASED: 16 -> 32. Fixes pronoun/gender swaps by keeping names in memory longer.
 embed_dim    = 256                                                                                # token/positional embedding dimension (d_model)
 n_heads      = 4                                                                                  # number of attention heads in each transformer layer
@@ -15,9 +16,10 @@ n_layers     = 3                                                                
 batch_size   = 1536                                                                               # DECREASED: 2048 -> 1536 to offset the math cost of context=32 and stay under 2 mins.
 lr           = 2e-3                                                                               # high learning rate to match the larger batch
 n_steps      = 1800                                                                               # Adjusted to fit the 2-min budget with larger context.
+temp         = 0.5                                                                                # DECREASED: 0.7 -> 0.5. Makes the model more confident, eliminating fake words like "throbe".
 
 # --- Data & Tokenization ---
-input_ids, target_ids, idx_to_char, token_ids = load_tinystories(num_stories=5000, context_size=context_size)
+input_ids, target_ids, idx_to_char, token_ids = load_tinystories(num_stories=num_stories, context_size=context_size)
 input_ids, target_ids = torch.tensor(input_ids), torch.tensor(target_ids)
 
 # --- Model ---
@@ -59,12 +61,12 @@ print(f"Training time: {time.time() - start:.1f}s")
 
 # --- Generate ---
 @torch.no_grad()
-def generate(num_chars=200, context_ids=list(token_ids[:context_size])):
+def generate(num_chars=200, context_ids=list(token_ids[:context_size]), temp=temp):
     output_chars = [idx_to_char[i] for i in context_ids]
     for _ in range(num_chars):
         x = tok_embed(torch.tensor([context_ids])) + pos_embed(torch.arange(context_size))
-        # DECREASED temp 0.7 -> 0.5. Makes the model more confident, eliminating fake words like "throbe".
-        next_token_probs = torch.softmax(linear(transformer(x)[:, -1, :]) / 0.5, 1)
+        # Makes the model more confident, eliminating fake words like "throbe".
+        next_token_probs = torch.softmax(linear(transformer(x)[:, -1, :]) / temp, 1)
         next_token = torch.multinomial(next_token_probs, 1).item()
         context_ids, output_chars = context_ids[1:] + [next_token], output_chars + [idx_to_char[next_token]]
     return ''.join(output_chars)
