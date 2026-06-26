@@ -28,17 +28,17 @@ Head over to **[BENCHMARKS.md](BENCHMARKS.md)** after reading this to see the ac
 We didn't start with a complex AI. We built up to it, upgrading the model step-by-step. Each model here is an **experiment**—we change one major thing to see if it makes the AI smarter or faster.
 
 ### Level 1: The Basics (Predicting Letters)
-*   **1. `NameSLP.py` (The NumPy Baseline):** A super simple model written in raw NumPy. It looks at 6 letters and guesses the next one to make up fake names (like "Emma" or "Oliver"). 
-*   **2. `TinyMLP.py` (The CuPy MLP):** We upgrade to a Multi-Layer Perceptron (MLP) using CuPy (for GPU speed). We also give it "learned embeddings"—a cheat sheet that helps it understand letters.
-*   **3. `TorchMLP.py` (The PyTorch MLP):** The exact same model as #2, but rewritten in PyTorch. This lets us use PyTorch's "autograd" (automatic gradient calculator) so we don't have to do the hard calculus by hand!
+*   **1. [NameSLP.py](NameSLP.py) (The NumPy Baseline):** A super simple model written in raw NumPy. It looks at 6 letters and guesses the next one to make up fake names (like "Emma" or "Oliver"). 
+*   **2. [TinyMLP.py](TinyMLP.py) (The CuPy MLP):** We upgrade to a Multi-Layer Perceptron (MLP) using CuPy (for GPU speed). We also give it "learned embeddings"—a cheat sheet that helps it understand letters.
+*   **3. [TorchMLP.py](TorchMLP.py) (The PyTorch MLP):** The exact same model as #2, but rewritten in PyTorch. This lets us use PyTorch's "autograd" (automatic gradient calculator) so we don't have to do the hard calculus by hand!
 
 ### Level 2: Enter the Transformer (The "Brain" Upgrade)
-*   **4. `SimpleTransformer.py` (The Bridge):** We take our PyTorch MLP and add a 2-layer Transformer Encoder. This gives the AI "attention"—the ability to look at the context of a whole sentence, not just the letter right before it.
-*   **5. `TinyTransformer.py` (The Workhorse):** This is our baseline model for all the experiments in the `BENCHMARKS.md` file! We add fancy speed tricks like mixed precision (using smaller numbers to calculate faster) and cosine learning rates.
-*   **6. `TinyTransformerClass.py` (The Cleanup):** The exact same model as #5, but we organize the code using Object-Oriented Programming (OOP). This makes the code look like standard, professional PyTorch.
+*   **4. [SimpleTransformer.py](SimpleTransformer.py) (The Bridge):** We take our PyTorch MLP and add a 2-layer Transformer Encoder. This gives the AI "attention"—the ability to look at the context of a whole sentence, not just the letter right before it.
+*   **5. [TinyTransformer.py](TinyTransformer.py) (The Workhorse):** This is our baseline model for all the experiments in the `BENCHMARKS.md` file! We add fancy speed tricks like mixed precision (using smaller numbers to calculate faster) and cosine learning rates.
+*   **6. [TinyTransformerClass.py](TinyTransformerClass.py) (The Cleanup):** The exact same model as #5, but we organize the code using Object-Oriented Programming (OOP). This makes the code look like standard, professional PyTorch.
 
 ### Level 3: Modern AI (Llama Architecture)
-*   **7. `TinyLlama.py` (The Modern Era):** We rebuild the model using the exact same architecture tricks used in Meta's Llama models. We swap old math for new math: **RoPE** (a smarter way to understand word order), **RMSNorm** (better stabilization), and **SiLU** (a better activation function). We also use `torch.compile` to double the GPU speed.
+*   **7. [TinyLlama.py](TinyLlama.py) (The Modern Era):** We rebuild the model using the exact same architecture tricks used in Meta's Llama models. We swap old math for new math: **RoPE** (a smarter way to understand word order), **RMSNorm** (better stabilization), and **SiLU** (a better activation function). We also use `torch.compile` to double the GPU speed.
 
 ---
 
@@ -46,25 +46,25 @@ We didn't start with a complex AI. We built up to it, upgrading the model step-b
 
 | File | What it does |
 | :--- | :--- |
-| `README.md` | You are here! Project overview and guide. |
-| `BENCHMARKS.md` | **The Lab Notebook!** Track our experiments, ablations, and accuracy results. |
-| `TODO.md` | Task list and planned follow-ups. |
-| `LICENSE` | Repository license. |
+| [README.md](README.md) | You are here! Project overview and guide. |
+| [BENCHMARKS.md](BENCHMARKS.md) | **The Lab Notebook!** Track our experiments, ablations, and accuracy results. |
+| [TODO.md](TODO.md) | Task list and planned follow-ups. |
+| [LICENSE](LICENSE) | Repository license. |
 | **Datasets & Loaders** | |
-| `names_dataset.py` | Loads the names dataset for `NameSLP.py`. |
-| `tinystories_dataset.py` | Loads the TinyStories dataset for all other models. |
+| [names_dataset.py](names_dataset.py) | Loads the names dataset for `NameSLP.py`. |
+| [tinystories_dataset.py](tinystories_dataset.py) | Loads the TinyStories dataset for all other models. |
 | **The Models** | |
-| `NameSLP.py` | NumPy single-layer perceptron. |
-| `TinyMLP.py` | CuPy character MLP. |
-| `TorchMLP.py` | PyTorch character MLP. |
-| `SimpleTransformer.py` | Simplified PyTorch transformer. |
-| `TinyTransformer.py` | PyTorch character transformer (Our Baseline). |
-| `TinyTransformerClass.py` | OOP refactor of the TinyTransformer. |
-| `TinyLlama.py` | Modern Llama-style transformer. |
+| [NameSLP.py](NameSLP.py) | NumPy single-layer perceptron. |
+| [TinyMLP.py](TinyMLP.py) | CuPy character MLP. |
+| [TorchMLP.py](TorchMLP.py) | PyTorch character MLP. |
+| [SimpleTransformer.py](SimpleTransformer.py) | Simplified PyTorch transformer. |
+| [TinyTransformer.py](TinyTransformer.py) | PyTorch character transformer (Our Baseline). |
+| [TinyTransformerClass.py](TinyTransformerClass.py) | OOP refactor of the TinyTransformer. |
+| [TinyLlama.py](TinyLlama.py) | Modern Llama-style transformer. |
 | **Explained Guides** | |
-| `TinyMLP-explained.md` | Walkthrough of `TinyMLP.py` (data flow, tensor shapes, gradients). |
-| `SimpleTransformer-explained.md` | Walkthrough of the bridge from MLP to Transformer. |
-| `TinyTransformer-explained.md` | Walkthrough of architecture choices and speed/quality optimization. |
+| [TinyMLP-explained.md](TinyMLP-explained.md) | Walkthrough of `TinyMLP.py` (data flow, tensor shapes, gradients). |
+| [SimpleTransformer-explained.md](SimpleTransformer-explained.md) | Walkthrough of the bridge from MLP to Transformer. |
+| [TinyTransformer-explained.md](TinyTransformer-explained.md) | Walkthrough of architecture choices and speed/quality optimization. |
 
 ---
 
@@ -83,7 +83,7 @@ This project is designed to run on **Google Colab** using a free T4 GPU.
 *   `datasets` (Hugging Face library to stream the TinyStories text)
 *   `torch` (PyTorch, for building the neural networks)
 
-*Note: `TorchMLP.py` and `SimpleTransformer.py` can run on a normal CPU if you don't have a GPU, but they will be much slower!*
+*Note: [TorchMLP.py](TorchMLP.py) and [SimpleTransformer.py](SimpleTransformer.py) can run on a normal CPU if you don't have a GPU, but they will be much slower!*
 
 ---
 
@@ -98,7 +98,7 @@ We use two datasets to train our AI:
 ## 🚀 Suggested Next Improvements
 
 Want to keep tinkering? Here are some future experiments you could try:
-*   Add a CPU/NumPy fallback to `TinyMLP.py` so it runs without a GPU.
+*   Add a CPU/NumPy fallback to [TinyMLP.py](TinyMLP.py) so it runs without a GPU.
 *   Add command-line arguments so you can change hyperparameters without editing the code.
 *   Add a "Save/Load" feature so you don't have to retrain the model every time.
 *   Add deterministic seeding so you get the exact same results every time you run an experiment.
