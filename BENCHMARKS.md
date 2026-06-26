@@ -20,12 +20,10 @@ Our baseline model is **TinyTransformer.py** (a 2-layer transformer, float16 pre
   - [Phase 2: Shape & Size Tests (Does depth or width matter more?)](#phase-2-shape--size-tests-does-depth-or-width-matter-more)
   - [Phase 3: The "Raw Score" Champions (Batch Size & Learning Rate)](#phase-3-the-raw-score-champions-batch-size--learning-rate)
   - [Phase 4: The Real Intelligence Push (Generalization vs. Memorization)](#phase-4-the-real-intelligence-push-generalization-vs-memorization)
-- [📝 Experiment Details & Lessons Learned](#-experiment-details--lessons-learned)
-  - [🧪 EXPERIMENTS: Upgrading the Engine](#-experiments-upgrading-the-engine)
-    - [Phase 1: Architecture Tweaks](#phase-1-architecture-tweaks)
-    - [Phase 2: The Training Hacks](#phase-2-the-training-hacks)
-    - [Phase 3: The Coherence Push](#phase-3-the-coherence-push)
-  - [✂️ ABLATION: Proving What Matters](#%EF%B8%8F-ablation-proving-what-matters)
+- [📝 Experiment & Ablation Details](#-experiment--ablation-details)
+  - [🏗️ Theme 1: Architecture Choices (Shape, Size, & Encoding)](#%EF%B8%8F-theme-1-architecture-choices-shape-size--encoding)
+  - [⚡ Theme 2: Speed, Training, & Optimization Hacks](#-theme-2-speed-training--optimization-hacks)
+  - [🧠 Theme 3: The "Real Intelligence" Push (Data, Context, & Regularization)](#-theme-3-the-real-intelligence-push-data-context--regularization)
 - [📖 Generated Samples (Seeing is Believing)](#-generated-samples-seeing-is-believing)
 
 ---
@@ -192,21 +190,31 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 
 ---
 
-## 📝 Experiment Details & Lessons Learned
+## 📝 Experiment & Ablation Details
 
-### 🧪 EXPERIMENTS: Upgrading the Engine
-*These tests try adding or changing features to see if we can build a better, faster, or smarter model.*
+Here, we dive deep into the specific upgrades, setting adjustments, and feature removals we tested to find the ultimate small-scale language model. We have categorized these investigations into three primary thematic blocks.
 
-#### Phase 1: Architecture Tweaks
-**1. `torch.compile`: Cold vs Warm Run**
-*   **The Change:** `torch.compile` speeds up code, but it takes time to "translate" the Python code into fast machine code on the first run.
-*   **Result:** Cold Time (1st run) = 46.3s. Warm Time (2nd run) = 19.7s.
-*   **The Takeaway:** Always run your code once, throw away the time, and run it again to see the true speed. Like warming up a car engine!
+### 🏗️ Theme 1: Architecture Choices (Shape, Size, & Encoding)
 
-**2. Layer Depth (2 vs 3 vs 4 layers)**
+**1. Layer Depth (2 vs 3 vs 4 layers)**
 *   **The Change:** We added extra layers to see if a "taller" brain is better than a "wider" one. 
 *   **Result:** 3 layers hit 73.5% in 2200 steps. 4 layers hit 73.1% but took 3400 steps.
 *   **The Takeaway:** 3 layers is the **sweet spot**. Think of it like building a tower: going wider takes huge amounts of material, but going taller gives the model more "steps" to process complex logic. But go too tall, and it becomes too slow to train!
+
+**2. Shape: Narrow/Deep vs. Wide/Short**
+*   **The Feature Removed/The Change:** We halved the model's width (`embed_dim` 256 → 128, `ffn_dim` 1024 → 512) and doubled its depth (2 → 4 layers), cutting the total parameters in half from 1.6M to 0.8M parameters.
+*   **Result:** Despite having 50% fewer parameters, the taller, skinnier model actually *beat* the wider baseline's accuracy by +1.0% (69.1% vs 68.1%).
+*   **The Takeaway:** Depth is incredibly powerful for reasoning and context. A deeper, narrow network generalizes and learns compositional rules better than a shallow, wide model because it has more sequential processing steps to refine features.
+
+**3. Weight Tying (Parameter Sharing)**
+*   **The Feature Removed/The Change:** We forced the "input reading" layer (token embedding) and the "output guessing" layer (linear head) to share the exact same weights (`linear.weight = tok_embed.weight`), reducing parameter overhead.
+*   **Result:** Accuracy dropped by 3.0%, and the starting loss exploded at step 0 to over 250!
+*   **The Takeaway:** Weight tying is a great trick for massive models with huge 50,000-word vocabularies because it saves millions of parameters. But on our tiny 65-character alphabet, it just confuses the model because the layers have mismatched initialization needs (Kaiming uniform for linear projection vs. normal distribution for embeddings).
+
+**4. Positional Embeddings**
+*   **The Feature Removed:** We removed the code that tells the AI the order of the letters. The AI now sees "tac" and "cat" as the exact same thing.
+*   **Result:** Accuracy crashed by 7.7%. 
+*   **The Takeaway:** Transformers are like a person reading a handful of Scrabble tiles scattered on a table. By default, they see all the letters but have no concept of left-to-right order. Without Positional Embeddings, the AI is just looking at "word soup." Order matters!
 
 **3. Context Size (8 vs 64 characters)**
 *   **The Change:** We gave the model a bigger "short-term memory," letting it look at 64 characters at once instead of 8.
@@ -254,6 +262,26 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 *   **The Feature Removed:** We removed the code that tells the AI the order of the letters. The AI now sees "tac" and "cat" as the exact same thing.
 *   **Result:** Accuracy crashed by 7.7%. 
 *   **The Takeaway:** Transformers are like a person reading a handful of Scrabble tiles scattered on a table. By default, they see all the letters but have no concept of left-to-right order. Without Positional Embeddings, the AI is just looking at "word soup." Order matters!
+
+**2. Ablation: Weight Tying (Parameter Sharing)**
+*   **The Feature Removed/The Change:** We forced the "input reading" layer (token embedding) and the "output guessing" layer (linear head) to share the exact same weights (`linear.weight = tok_embed.weight`), reducing parameter overhead.
+*   **Result:** Accuracy dropped by 3.0%, and the starting loss exploded at step 0 to over 250!
+*   **The Takeaway:** Weight tying is a great trick for massive models with huge 50,000-word vocabularies because it saves millions of parameters. But on our tiny 65-character alphabet, it just confuses the model because the layers have mismatched initialization needs (Kaiming uniform for linear projection vs. normal distribution for embeddings).
+
+**3. Ablation: Last-Word vs. Full-Sequence Causal Loss**
+*   **The Feature Removed/The Change:** Instead of only calculating the loss on the very last predicted token, we applied a causal mask and calculated the loss across all 8 sequence positions, producing 8× more training feedback per batch.
+*   **Result:** The model learned much faster early in training (+3.7% accuracy at step 200), but plateaued at the same ~67.6% final accuracy ceiling while taking 1.47× longer to train.
+*   **The Takeaway:** Asking the model to predict *every* token in the sentence (the standard way GPT models learn) dramatically improves sample-efficiency early on. However, for a small architecture, it doesn't raise the ultimate accuracy ceiling—it just helps the model reach it faster at the cost of heavier step-by-step math.
+
+**4. Ablation/Experiment: Narrow/Deep vs. Wide/Short Shape**
+*   **The Feature Removed/The Change:** We halved the model's width (`embed_dim` 256 → 128, `ffn_dim` 1024 → 512) and doubled its depth (2 → 4 layers), cutting the total parameters in half from 1.6M to 0.8M parameters.
+*   **Result:** Despite having 50% fewer parameters, the taller, skinnier model actually *beat* the wider baseline's accuracy by +1.0% (69.1% vs 68.1%).
+*   **The Takeaway:** Depth is incredibly powerful for reasoning and context. A deeper, narrow network generalizes and learns compositional rules better than a shallow, wide model because it has more sequential processing steps to refine features.
+
+**5. Ablation/Experiment: Flash/SDPA Attention & Context Scaling**
+*   **The Feature Removed/The Change:** We activated PyTorch's native Scaled Dot-Product Attention (SDPA) with Memory-Efficient Flash attention kernels and expanded the context size from 8 to 32 characters on the Narrow-Deep model.
+*   **Result:** It ran 2.6× faster than the naive long-context approach (confirming the O(T²) attention bottleneck was successfully bypassed!), but final accuracy only improved by +0.2% and training took 3.2× longer than the 8-character context.
+*   **The Takeaway:** Memory-efficient attention math works beautifully, but context windows are only as good as the model's capacity. Bumping the memory window to 32 characters on a skinny 128-dimension model provides more information than its small "brain" can physically encode or utilize.
 
 ---
 
