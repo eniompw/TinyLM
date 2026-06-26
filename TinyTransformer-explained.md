@@ -134,7 +134,7 @@ with torch.autocast('cuda', dtype=torch.float16):
 ### 4) Fused AdamW
 
 ```python
-optimizer = torch.optim.AdamW(params, lr=lr, betas=(0.9, 0.95), fused=True)
+optimizer = torch.optim.AdamW(params, lr=lr, betas=(0.9, 0.95), weight_decay=0.01, fused=True)
 ```
 
 With `fused=True`, parameter updates are grouped into optimized CUDA kernels instead of many small launches.
@@ -146,7 +146,7 @@ This reduces update overhead, especially when many tensors are involved.
 
 ```python
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-    optimizer, n_steps, eta_min=1e-4
+    optimizer, T_max=n_steps, eta_min=1e-4
 )
 ```
 
@@ -174,10 +174,10 @@ When we test the model every 200 steps, we don't test it on the whole dataset. W
 ### 5) Inference temperature (`0.5`)
 
 ```python
-next_token_probs = torch.softmax(linear(transformer(x)[:, -1, :]) / 0.5, 1)
+next_token_probs = torch.softmax(linear(transformer(x)[:, -1, :]) / temp, 1)
 ```
 
-Dividing logits by `0.5` sharpens the output distribution:
+Dividing logits by `temp` (`0.5` by default) sharpens the output distribution:
 
 - high-confidence tokens become more likely
 - low-confidence tokens become less likely
