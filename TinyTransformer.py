@@ -15,7 +15,7 @@ ffn_dim      = 1024                                                             
 n_layers     = 3                                                                                  # 3 layers is the sweet spot for depth vs speed
 batch_size   = 1536                                                                               # DECREASED: 2048 -> 1536 to offset the math cost of context=32 and stay under 2 mins.
 lr           = 2e-3                                                                               # high learning rate to match the larger batch
-n_steps      = 1800                                                                               # Adjusted to fit the 2-min budget with larger context.
+n_steps      = 1801                                                                               # Adjusted to fit the 2-min budget with larger context.
 temp         = 0.5                                                                                # DECREASED: 0.7 -> 0.5. Makes the model more confident, eliminating fake words like "throbe".
 
 # --- Data & Tokenization ---
