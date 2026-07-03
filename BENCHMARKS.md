@@ -79,12 +79,12 @@ Before we dive in, here are two key scientific concepts we use to test AI models
 | TinyTransformer.py (3 layers, batch=1536) ✨ | 73.0%* | 2200 | 2.7× |
 | **TinyTransformer.py (3 layers, batch=2048)** | **76.1%** | **2200** | **~3.5×** |
 | **TinyTransformer.py (3L, ctx=16, 5000 stories)** 🧠 | **71.7%** | **2200** | **~2.5×** |
-| **TinyTransformer.py (3L, ctx=32, 5000 stories, 1536 batch)** | **70.1%** | **1800** | **~3.2×** |
-| **TinyTransformer.py (3L, ctx=32, 5000 stories, warmup+clip)** 👑 | **70.7%** | **1600** | **~3.2×** |
+| **TinyTransformer.py (3L, ctx=32, 5000 stories, 1536 batch)** 👑 | **70.1%** | **1800** | **~3.2×** |
+| TinyTransformer.py (3L, ctx=32, 5000 stories, warmup+clip) | 70.7% | 1600 | ~3.3× |
 | microgpt_lite.py | 79.4% | 3500 | 10.2× |
 
 > **🚨 The Plot Twist (Read before judging the scores!):**
-> Look at the bottom rows. Why did accuracy go *down* to ~70%? Because we expanded the dataset from 1,000 to 5,000 stories. The 76.1% model was cheating—it memorized the test. The 70.7% model stopped memorizing and actually learned English. **Lower accuracy score = higher real-world intelligence!**
+> Look at the bottom rows. Why did accuracy go *down* to ~70%? Because we expanded the dataset from 1,000 to 5,000 stories. The 76.1% model was cheating—it memorized the test. The ~70% models stopped memorizing and actually learned English. **Lower accuracy score = higher real-world intelligence!**
 
 ---
 
@@ -113,7 +113,7 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 | **Exp** | **Activation:** ReLU → GELU | Neutral | 14% slower | ❌ GELU is too math-heavy for this small model. |
 | **Exp** | **Loss:** Last-word vs Full-sequence | Neutral | 1.47× slower | ⚠️ Learns faster early on, but hits the same ceiling. |
 | **Exp** | **Flash Attention** + Context 32 | +0.2% | 3.2× slower | ⚠️ Proves memory-efficient math works, but model is too small to use it. |
-| **Exp** | **LR Warmup** (50 steps) + **Grad Clipping** (1.0) | +0.6% | Negligible | ✅ Cleaner training curve, no accuracy wobble. Free stability! |
+| **Exp** | **LR Warmup** (50 steps) + **Grad Clipping** (1.0) | +0.6% peak | Slightly slower | ⚠️ Smoother curve, but not worth the extra code for this scale. |
 
 ### 🧠 The "Real Intelligence" Push (Batch, Context & Data)
 | Type | Change Tested | Accuracy Δ | Speed Δ | The Verdict |
@@ -192,12 +192,12 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 > 💡 **Pro-Tip:** Look at the scores! They are *lower* than Phase 3 (which hit 76.1%). But look at the generated samples below. This proves that on small datasets, high accuracy is just memorization (overfitting). If you want a model that writes well in the real world, train it on more data and accept a slightly lower eval score!
 
 ### Phase 5: Optimizer Stability (Warmup & Gradient Clipping)
-*Goal: Can we improve on Phase 4's 70.1% ceiling with zero architectural changes, just by making the optimizer more stable?*
+*Goal: Test whether standard optimizer-stability tricks help enough at this scale to justify the extra code complexity.*
 
 *Changes added to the Phase 4 winning config (3L, ctx=32, 5k stories, batch=1536):*
-- **LR Warmup:** 50-step linear warmup before cosine decay (prevents gradient spikes at high LR on step 0)
+- **LR Warmup:** 50-step linear warmup before cosine decay
 - **Gradient Clipping:** `clip_grad_norm_(params, 1.0)` after every backward pass
-- **`eta_min`:** 1e-4 (cosine floor kept conservative to avoid premature LR collapse)
+- **`eta_min`:** 1e-4
 
 | Step | Loss | Acc | LR |
 | ---: | ---: | ---: | ---: |
@@ -214,9 +214,9 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 
 **Training time: 133.6s**
 
-> 💡 **Key Result:** Peak accuracy improved from **70.1% → 70.7%** with **zero time penalty** and a noticeably smoother training curve — no mid-run wobble. The previous Phase 4 run saw accuracy stall and fluctuate between steps 800–1200. Warmup + grad clipping eliminates this entirely, giving monotonically increasing accuracy all the way to the peak.
+> 💡 **Key Result:** Warmup + clipping produced a smoother, more monotonic learning curve and a slightly higher peak (**70.7%**), but the simpler no-warmup baseline still reached **70.0%** in less time (**127.7s**) with less code.
 
-> 💡 **Pro-Tip:** Notice the accuracy is *still climbing* at step 1000 (65.0% → 68.0% → 68.6% → 70.7%). The warmup delays early momentum, so the effective convergence window shifts later. **Optimal stop: step 1600.** Running to 1800 shows the first sign of plateau (70.5%), so set `n_steps=1800` with early-stop intuition at step 1600.
+> 💡 **Verdict:** These are valid techniques, but for this tiny model they are **not the new canonical config**. They belong in the notebook as a useful negative/edge result: standard stability tricks can help a little, but they do **not** beat simplicity enough to justify the extra moving parts.
 
 ---
 
@@ -286,8 +286,8 @@ Here, we dive deep into the specific upgrades, setting adjustments, and feature 
 #### Phase 4: Optimizer Stability
 **10. LR Warmup + Gradient Clipping**
 *   **The Change:** Added a 50-step linear LR warmup (via `SequentialLR` chaining `LinearLR` → `CosineAnnealingLR`) and gradient clipping (`clip_grad_norm_(params, 1.0)`) on every backward pass. Applied on top of the Phase 4 winning config (3L, ctx=32, 5k stories, batch=1536, lr=2e-3).
-*   **Result:** Peak accuracy improved from **70.1% → 70.7%** at step 1600, with a perfectly smooth monotonically increasing accuracy curve. No mid-run wobble. Zero time overhead.
-*   **The Takeaway:** High learning rates with large batches can cause gradient spikes in the first few steps, destabilising the loss landscape before the model has "warmed up." A short warmup lets the optimizer find its footing before hitting full speed. Gradient clipping acts as an emergency brake, preventing any single bad batch from throwing off the weights. Both tricks cost nothing in wall-clock time and are now part of the canonical config.
+*   **Result:** Peak accuracy improved from **70.1% → 70.7%** at step 1600, but the simpler cosine-only version still reached **70.0%** in less time and with less code.
+*   **The Takeaway:** Warmup and clipping are still useful teaching examples because they show that standard optimizer tricks can smooth training. But at this scale, they are a **marginal optimization**, not a must-have. The simpler code wins on clarity-to-benefit ratio.
 
 ---
 
@@ -339,13 +339,13 @@ Numbers are great, but what does the AI actually write? Here are samples from ou
 > `Once there was a great time and she was green and strong. Tim and Sue were so happy that the box opened the bug friends. She was sad and looked for them. He grabbed the box of the went to help his mom came in`
 *(Notice how much better the clauses flow compared to the 76.1% champion. It learned structure, not just memorized words!)*
 
-**TinyTransformer.py - 3L, 1536 batch, 5k stories, ctx=32 (70.1% Acc - Previous 2-Minute Ceiling)**
-> `Once there was a little boy named Tim. Tim laughed and said, "Thank you, Tom. I want to a dog named Tim to the girl was sad. He liked to play with his friends. They were very happy and said, "Okay, what is a small bird came to share`
-*(Look at the first two sentences. "little boy named Tim... He liked to play". The 32-character context allowed the model to maintain the gender connection perfectly across a sentence boundary. No fake words, perfect punctuation.)*
+**TinyTransformer.py - 3L, 1536 batch, 5k stories, ctx=32 (70.1% Acc - Current Simplicity Champion 👑)**
+> `Once there was a little boy named Tim. He was so happy. The dog was scared and happy. They saw a little girl who liver seen the ball. She lived in a big branch with the ball and went to the park. They are happy and started to share`
+*(This is the cleanest clarity-to-performance tradeoff in the repo: simple code, no warmup boilerplate, and nearly identical accuracy to the more complex stability variant.)*
 
-**TinyTransformer.py - 3L, 1536 batch, 5k stories, ctx=32, warmup+clip (70.7% Acc - New 2-Minute Crown 👑)**
+**TinyTransformer.py - 3L, 1536 batch, 5k stories, ctx=32, warmup+clip (70.7% Acc - Stability Variant)**
 > `Once there was a little boy named Tim. Tim was so happy to ho excited to show the water. The bird said, "Thank you sad and wanted to be kind out the little girl became good friends. They liked to play with the park.`
-*(Stable subject tracking, clean punctuation, natural clause transitions. Same config as previous — just a better-trained version thanks to optimizer stability.)*
+*(Useful as a teaching experiment: the curve is smoother, but the output quality is not clearly better enough to justify the added code.)*
 
 **microgpt_lite.py (79.4% Acc - Nearly perfect TinyStory)**
 > `Once upon a time, there was a little boy named Tim. He loved to measure his favorite toy. One day, he saw a big, deep broken shirt. He thought it would be fun to play with it.`
