@@ -74,11 +74,41 @@ Everything else that's new in the first Transformer version — the 2-layer enco
 and inference temperature (`0.7`) — was **not** discovered through ablations here. It was ported
 directly from the author's own [MicroGPT](https://github.com/eniompw/MicroGPT) research notes.
 One idea from those notes, AdamW `betas=(0.9, 0.95)`, was documented but deliberately left at
-PyTorch defaults in the initial version.
+PyTorch defaults in the initial version. These notes themselves drew heavily from
+[Keller Jordan's modded-nanogpt speedrun](https://github.com/KellerJordan/modded-nanogpt),
+making `TinyTransformer.py` a two-hop descendant of that work.
 
 This is why Phase 1 treats `TinyMLP.py` / `TorchMLP.py` as prior-generation reference points
 rather than unrelated models: `TinyTransformer.py` is a direct descendant of the MLP baseline
 with attention layered on top.
+
+### 🔗 The Keller Jordan Influence
+
+Many of the "inherited from MicroGPT" defaults in `TinyTransformer.py` trace back further —
+to [Keller Jordan's modded-nanogpt](https://github.com/KellerJordan/modded-nanogpt), a
+record-breaking GPT-2 speedrun repo. `MicroGPT` was directly inspired by that work, and
+`TinyTransformer.py` inherits those ideas through it.
+
+The following features in `TinyTransformer.py` are Keller-lineage ideas:
+
+| Feature | In TinyTransformer? | Origin |
+| :--- | :--- | :--- |
+| `torch.compile` | ✅ Yes | Keller record #1 |
+| `AdamW betas=(0.9, 0.95)` | ✅ Yes | llm.c baseline, refined by Keller |
+| `fused=True` optimizer | ✅ Yes | Keller training loop |
+| `float16` mixed precision | ✅ Yes | Keller record #10 |
+| `CosineAnnealingLR` + `eta_min=1e-4` | ✅ Yes | Keller record #19 (decay to 0.1×, not 0) |
+| Pre-LN (`norm_first=True`) | ✅ Yes | Keller modernized architecture |
+| `bfloat16` | ❌ Tried, failed | T4 has no native bfloat16 hardware |
+| Flash Attention | ❌ Tried, marginal | Model too small to benefit |
+| Muon optimizer | ❌ Not tried | Too complex for educational scope |
+| RoPE embeddings | ❌ Not tried | Learned pos. embeddings kept for clarity |
+
+This lineage matters because it explains *why* the defaults work so well out of the box —
+they were battle-tested at GPT-2 scale before being ported down to this tiny model.
+It also explains why some "failed" experiments in this notebook (bfloat16, Flash Attention)
+are legitimate wins at larger scale: the technique is sound, but the hardware or model
+size isn't the right fit here.
 
 ---
 
