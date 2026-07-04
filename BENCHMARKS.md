@@ -25,6 +25,7 @@ Our baseline model is **TinyTransformer.py** (a 2-layer transformer, float16 pre
   - [Phase 5: Optimizer Stability (Warmup & Gradient Clipping)](#phase-5-optimizer-stability-warmup--gradient-clipping)
   - [Phase 6: Bigger Batch on Large Dataset (Does batch size help when we're not memorizing?)](#phase-6-bigger-batch-on-large-dataset-does-batch-size-help-when-were-not-memorizing)
   - [Phase 7: Breaking the Ceiling — More Heads, More Params (Both Fail)](#phase-7-breaking-the-ceiling--more-heads-more-params-both-fail)
+  - [Phase 8: `torch.compile` — Cold vs Warm Start](#phase-8-torchcompile--cold-vs-warm-start)
 - [📝 Experiment & Ablation Details](#-experiment--ablation-details)
   - [🏗️ Theme 1: Architecture Choices (Shape, Size, & Encoding)](#%EF%B8%8F-theme-1-architecture-choices-shape-size--encoding)
   - [⚡ Theme 2: Speed, Training, & Optimization Hacks](#-theme-2-speed-training--optimization-hacks)
@@ -158,7 +159,7 @@ The canonical TinyTransformer config isn't just bigger hyperparameters — it al
 
 | Component | `SimpleTransformer.py` | `TinyTransformer.py` (canonical) | Accuracy Impact | Speed Impact | Proven By |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`torch.compile`** | ✅ Already present | ✅ Same | Neutral | **~2.3× faster** | Direct ablation (Cold vs Warm) |
+| **`torch.compile`** | ✅ Already present | ✅ Same | Neutral | **~1.2× faster** (after a ~32s one-time compile tax) | Phase 8: Direct ablation (Cold vs Warm) |
 | **float16 autocast** | ❌ float32 only | ✅ `torch.autocast` on forward + eval | Neutral | Major — halves memory bandwidth, enables batch=1536 + ctx=32 in <2min | bfloat16 ablation: 4.2× slower for +0.2% |
 | **`CosineAnnealingLR`** | ❌ Flat LR | ✅ `CosineAnnealingLR(T_max=n_steps, eta_min=1e-4)` | Smooths final convergence | ~0 | Phase 5: adding warmup on top only gained +0.6%, meaning cosine does the heavy lifting |
 | **AdamW** | ❌ `Adam(params, lr)` | ✅ `AdamW(params, lr, betas=(0.9, 0.95), weight_decay=0.01, fused=True)` | Neutral on acc; `weight_decay` stops repetitive output | `fused=True` speeds up GPU optimizer kernel | Experiment #9: `weight_decay` acts as "grammar regularizer" |
@@ -223,7 +224,7 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 ### ⚡ Training & Speed Hacks
 | Type | Change Tested | Accuracy Δ | Speed Δ | The Verdict |
 | :--- | :--- | ---: | ---: | :--- |
-| **Exp** | **`torch.compile`** (Cold vs Warm) | Neutral | ~2.3× faster | ✅ Always "warm up" your model before timing it! |
+| **Exp** | **`torch.compile`** (Cold vs Warm) | Neutral | ~1.2× faster overall (one-time ~32s compile tax) | ✅ Always "warm up" your model before timing it! |
 | **Exp** | **Precision:** float16 → bfloat16 | +0.2% | 4.2× slower | ❌ The T4 GPU doesn't have native bfloat16 hardware. |
 | **Exp** | **Weight Tying** (sharing layers) | −3.0% | Neutral | ❌ Confused the model and hurt accuracy. |
 | **Exp** | **Activation:** ReLU → GELU | Neutral | 14% slower | ❌ GELU is too math-heavy for this small model. |
@@ -403,6 +404,52 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 > 💡 **The NaN Lesson:** The wider model (embed=320) immediately diverged to NaN at `lr=2e-3` with no clipping. This is the first experiment where gradient clipping became *necessary*, not optional — larger embeddings produce larger gradients that destabilize the optimizer before it can warm up.
 >
 > 💡 **The torch.compile Warning:** The embed=320 run triggered `torch._dynamo` recompilation warnings (hit config limit of 8). This is caused by the eval loop toggling `autocast` on/off, forcing graph recompilation. Part of the slowdown beyond just bigger matrices.
+
+### Phase 8: `torch.compile` — Cold vs Warm Start
+*Goal: Measure exactly how much `torch.compile` graph compilation costs, using the Phase 4 canonical config (3L, ctx=32, 5k stories, batch=1536). `params: 2,414,408`.*
+
+**Cold Start** (compilation happens inside the timed run — first call to the compiled graph):
+
+| Step | Loss | Acc | Time |
+| ---: | ---: | ---: | ---: |
+| 0 | 4.5738 | 19.2% | 32.5s |
+| 200 | 1.4513 | 55.4% | 46.0s |
+| 400 | 1.3140 | 61.3% | 59.8s |
+| 600 | 1.2122 | 63.4% | 74.2s |
+| 800 | 1.1545 | 64.6% | 89.7s |
+| 1000 | 1.0998 | 64.6% | 105.3s |
+| 1200 | 1.0466 | 67.7% | 119.8s |
+| 1400 | 0.9982 | 68.7% | 134.1s |
+| 1600 | 0.9977 | **70.8%** ⭐ | 148.5s |
+| 1800 | 0.9138 | 69.8% 📉 | 163.2s |
+
+**Training time: 163.2s**
+
+**Warm Start** (model already compiled/warmed up before the timer starts):
+
+| Step | Loss | Acc | Time |
+| ---: | ---: | ---: | ---: |
+| 0 | 4.5772 | 19.2% | 0.2s |
+| 200 | 1.4477 | 55.7% | 15.3s |
+| 400 | 1.3053 | 62.0% | 31.9s |
+| 600 | 1.2024 | 63.1% | 47.0s |
+| 800 | 1.1552 | 64.2% | 61.3s |
+| 1000 | 1.1250 | 64.9% | 75.5s |
+| 1200 | 1.0432 | 67.5% | 90.0s |
+| 1400 | 1.0152 | 68.8% | 105.1s |
+| 1600 | 0.9828 | 70.4% | 120.1s |
+| 1800 | 0.9244 | **70.5%** ⭐ | 134.9s |
+
+**Training time: 134.9s**
+
+> 💡 **Key Result:** Step 0 tells the whole story — **32.5s (cold) vs 0.2s (warm)** — a one-time graph-compilation tax of roughly **32 seconds**, paid only on the very first call to the compiled model. After that, both runs advance at nearly identical per-step speed (~14-15s per 200 steps). Total training time is **163.2s (cold) vs 134.9s (warm)** — a **~1.2× (17%) difference**, not the dramatic multi-x speedup people sometimes expect, because the fixed compile cost gets amortized over the whole run rather than eliminated.
+>
+> 💡 **The Takeaway:** `torch.compile`'s cost is almost entirely a **fixed upfront tax**, not a per-step penalty. The longer you train (more steps), the smaller that tax looks as a percentage of total time. Always benchmark speed *after* warmup — judging `torch.compile` by its first step (or a very short run) makes it look far worse than it actually is.
+
+**Generated samples:**
+
+- **Cold start (69.8% acc):** `Once there was a little boy named Tim. He was scared and said, "Thank you, Mom. I want to find they inside. They did not have the park with the temple home. They were happy to have a new friend and said, "I will help you find a big`
+- **Warm start (70.5% acc):** `Once there was a little boy named Tim. He was so happy. The dog was scared and said, "I will give you so much fun. It was a sorry, but I will said, "You should not stopped and said, "I like that you do the kitchen. It was a dark and`
 
 ---
 
