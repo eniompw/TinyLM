@@ -39,7 +39,7 @@ Our baseline model is **TinyTransformer.py** (a 2-layer transformer, float16 pre
 > 
 > To fix this, we use **Relative Speed Ratios**. We run the 2-Layer Baseline model as our "Control" (1.0× speed). If an experiment takes twice as long, its speed is **2.0×**. This ratio stays true whether you run it on a slow Colab GPU or a supercomputer!
 >
-> *Note: Larger batch sizes (e.g., 2048) use more memory bandwidth, which makes the "Colab Lottery" even more extreme. Runtimes can swing from ~65s to ~90s. Always use ratios!*
+> *Note: This is a **speed** effect, not an **accuracy** one — a controlled study of 65 runs across 6 GPU/TPU types (including T4) on a seeded CIFAR-10 CNN found only ~0.05%–0.3% accuracy/loss variance between runs (T4 stdev ≈ 0.05%) (source: "Cross-GPU Reproducibility," AI Vietnam / AIO Conquer). So the Colab Lottery jitters the clock, not the score.*
 
 ---
 
