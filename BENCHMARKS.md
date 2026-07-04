@@ -43,47 +43,68 @@ Our baseline model is **TinyTransformer.py** (a 2-layer transformer, float16 pre
 
 ## 🧬 Lineage: From TorchMLP to TinyTransformer
 
-Before any of the experiments below began, `TinyTransformer.py` wasn't designed from scratch — it started as a direct evolution of `TorchMLP.py` (see `TinyTransformer-explained.md`). The original baseline hyperparameters were carried over **unchanged**:
+`TinyTransformer.py` wasn't built from scratch — it evolved directly from `TorchMLP.py`
+(see `TinyTransformer-explained.md`). Understanding this lineage explains *why* the baseline
+hyperparameters look the way they do.
+
+### Inherited from TorchMLP (unchanged)
+
+These settings were carried over without modification:
 
 - `embed_dim = 256`
 - `torch.manual_seed(42)`
 - `batch_size = 1024`
 - `2001` training epochs, evaluated every `200` steps
 - Automatic device selection via `torch.set_default_device(...)`
-- The same `load_tinystories(...)` data pipeline and sliding-window autoregressive generation loop
+- The same `load_tinystories(...)` data pipeline and sliding-window generation loop
 
-Only two things actually changed when going from MLP to Transformer:
+### What actually changed
 
-- **`context_size`:** 4 → 8
-- **`num_stories`:** 200 → 1000 ("for a richer training signal")
+Only two hyperparameters were adjusted when moving from MLP to Transformer:
 
-Everything else new in the first version — the transformer encoder itself (`2` layers, `4` heads, `1024` feed-forward dim), `torch.compile`, float16 autocast + `GradScaler`, fused AdamW, `zero_grad(set_to_none=True)`, the cosine LR schedule (`eta_min=1e-4`), gradient clipping (`1.0`), and inference temperature (`0.7`) — wasn't discovered through ablations in this notebook. It was explicitly credited to research notes from the author's own [MicroGPT](https://github.com/eniompw/MicroGPT) repo. One idea from those notes, AdamW `betas=(0.9, 0.95)`, was documented but deliberately left at PyTorch defaults in the initial version.
+| Setting | TorchMLP | TinyTransformer |
+| :--- | :--- | :--- |
+| `context_size` | 4 | 8 |
+| `num_stories` | 200 | 1000 |
 
-This lineage is why "Phase 1: The Baselines" below treats `TinyMLP.py`/`TorchMLP.py` as prior-generation reference points rather than unrelated models: `TinyTransformer.py` is architecturally and operationally a direct descendant of the MLP baseline with attention layered on top, not an independent design. Every experiment and ablation that follows builds on top of that inherited baseline.
+Everything else that's new in the first Transformer version — the 2-layer encoder (4 heads,
+`ffn_dim=1024`), `torch.compile`, float16 autocast + `GradScaler`, fused AdamW,
+`zero_grad(set_to_none=True)`, cosine LR schedule (`eta_min=1e-4`), gradient clipping (`1.0`),
+and inference temperature (`0.7`) — was **not** discovered through ablations here. It was ported
+directly from the author's own [MicroGPT](https://github.com/eniompw/MicroGPT) research notes.
+One idea from those notes, AdamW `betas=(0.9, 0.95)`, was documented but deliberately left at
+PyTorch defaults in the initial version.
 
-### 🌱 How TorchMLP Itself Was Created
+This is why Phase 1 treats `TinyMLP.py` / `TorchMLP.py` as prior-generation reference points
+rather than unrelated models: `TinyTransformer.py` is a direct descendant of the MLP baseline
+with attention layered on top.
 
-`TorchMLP.py` didn't start from scratch either — it was born from a rename and refactor of
-`TorchLinear.py` (commit: `84b89b7f`, May 31 2026).
+---
 
-`TorchLinear.py` was a character-level language model that already had the core MLP + embedding
-pipeline but defined the model using a flat `nn.Sequential` block, similar in style to
-`torch_mlp_sequential.py` from the
+### 🌱 How TorchMLP itself was created
+
+`TorchMLP.py` was born from a rename and refactor of `TorchLinear.py`
+(commit `84b89b7f`, May 31 2026). `TorchLinear.py` was already a character-level language model
+with a core MLP + embedding pipeline, but it defined the model as a flat `nn.Sequential` block —
+the same style used in `torch_mlp_sequential.py` from the
 [MLP-Digits-Classifier](https://github.com/eniompw/MLP-Digits-Classifier) repo.
 
-The rename to `TorchMLP` came with two structural changes:
-- **`nn.Sequential` → `nn.Module`:** Refactored into a proper class, easier to extend toward transformer architecture.
-- **Separate `nn.Embedding` + MLP:** Clarified the embed → flatten → predict pipeline.
+The rename introduced two structural improvements:
 
-This places `TorchMLP` as the middle step in a three-file lineage:
+- **`nn.Sequential` → `nn.Module`:** Refactored into a proper class, making the architecture
+  easier to extend toward transformers.
+- **Separate `nn.Embedding` + MLP:** Made the embed → flatten → predict pipeline explicit and
+  readable.
 
-| Dimension | `torch_mlp_sequential` | `TorchMLP` | `microgpt_lite` |
+The full three-file lineage looks like this:
+
+| | `torch_mlp_sequential` | `TorchMLP` | `microgpt_lite` |
 | :--- | :--- | :--- | :--- |
-| Weight management | `nn.Linear` | `nn.Linear` | Raw tensors + `F.linear` |
-| Optimizer | Manual SGD | SGD | AdamW + cosine LR + GradScaler |
-| Architecture | 2-layer MLP | 3-layer MLP + embeddings | 6-layer transformer + attention |
-| Custom forward | No | Yes (embed + flatten) | Yes (full transformer loop) |
-| `torch.compile` | No | No | Yes |
+| **Weight management** | `nn.Linear` | `nn.Linear` | Raw tensors + `F.linear` |
+| **Optimizer** | Manual SGD | SGD | AdamW + cosine LR + GradScaler |
+| **Architecture** | 2-layer MLP | 3-layer MLP + embeddings | 6-layer transformer + attention |
+| **Custom forward** | No | Yes (embed + flatten) | Yes (full transformer loop) |
+| **`torch.compile`** | No | No | Yes |
 
 ---
 
