@@ -8,6 +8,7 @@ Our baseline model is **TinyTransformer.py** (a 2-layer transformer, float16 pre
 
 ## 📌 Contents
 
+- [🧬 Lineage: From TorchMLP to TinyTransformer](#-lineage-from-torchmlp-to-tinytransformer)
 - [🔬 The Scientific Method: How We Trust Our Data](#-the-scientific-method-how-we-trust-our-data)
 - [🧠 How to Read This Document](#-how-to-read-this-document)
 - [📊 The Leaderboard: Model Comparison](#-the-leaderboard-model-comparison)
@@ -35,6 +36,28 @@ Our baseline model is **TinyTransformer.py** (a 2-layer transformer, float16 pre
 > To fix this, we use **Relative Speed Ratios**. We run the 2-Layer Baseline model as our "Control" (1.0× speed). If an experiment takes twice as long, its speed is **2.0×**. This ratio stays true whether you run it on a slow Colab GPU or a supercomputer!
 >
 > *Note: Larger batch sizes (e.g., 2048) use more memory bandwidth, which makes the "Colab Lottery" even more extreme. Runtimes can swing from ~65s to ~90s. Always use ratios!*
+
+---
+
+## 🧬 Lineage: From TorchMLP to TinyTransformer
+
+Before any of the experiments below began, `TinyTransformer.py` wasn't designed from scratch — it started as a direct evolution of `TorchMLP.py` (see `TinyTransformer-explained.md`). The original baseline hyperparameters were carried over **unchanged**:
+
+- `embed_dim = 256`
+- `torch.manual_seed(42)`
+- `batch_size = 1024`
+- `2001` training epochs, evaluated every `200` steps
+- Automatic device selection via `torch.set_default_device(...)`
+- The same `load_tinystories(...)` data pipeline and sliding-window autoregressive generation loop
+
+Only two things actually changed when going from MLP to Transformer:
+
+- **`context_size`:** 4 → 8
+- **`num_stories`:** 200 → 1000 ("for a richer training signal")
+
+Everything else new in the first version — the transformer encoder itself (`2` layers, `4` heads, `1024` feed-forward dim), `torch.compile`, float16 autocast + `GradScaler`, fused AdamW, `zero_grad(set_to_none=True)`, the cosine LR schedule (`eta_min=1e-4`), gradient clipping (`1.0`), and inference temperature (`0.7`) — wasn't discovered through ablations in this notebook. It was explicitly credited to research notes from the author's own [MicroGPT](https://github.com/eniompw/MicroGPT) repo. One idea from those notes, AdamW `betas=(0.9, 0.95)`, was documented but deliberately left at PyTorch defaults in the initial version.
+
+This lineage is why "Phase 1: The Baselines" below treats `TinyMLP.py`/`TorchMLP.py` as prior-generation reference points rather than unrelated models: `TinyTransformer.py` is architecturally and operationally a direct descendant of the MLP baseline with attention layered on top, not an independent design. Every experiment and ablation that follows builds on top of that inherited baseline.
 
 ---
 
