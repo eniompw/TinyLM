@@ -60,6 +60,30 @@ Everything else new in the first version — the transformer encoder itself (`2`
 
 This lineage is why "Phase 1: The Baselines" below treats `TinyMLP.py`/`TorchMLP.py` as prior-generation reference points rather than unrelated models: `TinyTransformer.py` is architecturally and operationally a direct descendant of the MLP baseline with attention layered on top, not an independent design. Every experiment and ablation that follows builds on top of that inherited baseline.
 
+### 🌱 How TorchMLP Itself Was Created
+
+`TorchMLP.py` didn't start from scratch either — it was born from a rename and refactor of
+`TorchLinear.py` (commit: `84b89b7f`, May 31 2026).
+
+`TorchLinear.py` was a character-level language model that already had the core MLP + embedding
+pipeline but defined the model using a flat `nn.Sequential` block, similar in style to
+`torch_mlp_sequential.py` from the
+[MLP-Digits-Classifier](https://github.com/eniompw/MLP-Digits-Classifier) repo.
+
+The rename to `TorchMLP` came with two structural changes:
+- **`nn.Sequential` → `nn.Module`:** Refactored into a proper class, easier to extend toward transformer architecture.
+- **Separate `nn.Embedding` + MLP:** Clarified the embed → flatten → predict pipeline.
+
+This places `TorchMLP` as the middle step in a three-file lineage:
+
+| Dimension | `torch_mlp_sequential` | `TorchMLP` | `microgpt_lite` |
+| :--- | :--- | :--- | :--- |
+| Weight management | `nn.Linear` | `nn.Linear` | Raw tensors + `F.linear` |
+| Optimizer | Manual SGD | SGD | AdamW + cosine LR + GradScaler |
+| Architecture | 2-layer MLP | 3-layer MLP + embeddings | 6-layer transformer + attention |
+| Custom forward | No | Yes (embed + flatten) | Yes (full transformer loop) |
+| `torch.compile` | No | No | Yes |
+
 ---
 
 ## 🔬 The Scientific Method: How We Trust Our Data
