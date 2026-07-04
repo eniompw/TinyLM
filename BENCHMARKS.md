@@ -22,6 +22,7 @@ Our baseline model is **TinyTransformer.py** (a 2-layer transformer, float16 pre
   - [Phase 3: The "Raw Score" Champions (Batch Size & Learning Rate)](#phase-3-the-raw-score-champions-batch-size--learning-rate)
   - [Phase 4: The Real Intelligence Push (Generalization vs. Memorization)](#phase-4-the-real-intelligence-push-generalization-vs-memorization)
   - [Phase 5: Optimizer Stability (Warmup & Gradient Clipping)](#phase-5-optimizer-stability-warmup--gradient-clipping)
+  - [Phase 6: Bigger Batch on Large Dataset (Does batch size help when we're not memorizing?)](#phase-6-bigger-batch-on-large-dataset-does-batch-size-help-when-were-not-memorizing)
 - [📝 Experiment & Ablation Details](#-experiment--ablation-details)
   - [🏗️ Theme 1: Architecture Choices (Shape, Size, & Encoding)](#%EF%B8%8F-theme-1-architecture-choices-shape-size--encoding)
   - [⚡ Theme 2: Speed, Training, & Optimization Hacks](#-theme-2-speed-training--optimization-hacks)
@@ -102,8 +103,9 @@ Before we dive in, here are two key scientific concepts we use to test AI models
 | TinyTransformer.py (3 layers, batch=1536) ✨ | 73.0%* | 2200 | 2.7× |
 | **TinyTransformer.py (3 layers, batch=2048)** | **76.1%** | **2200** | **~3.5×** |
 | **TinyTransformer.py (3L, ctx=16, 5000 stories)** 🧠 | **71.7%** | **2200** | **~2.5×** |
-| **TinyTransformer.py (3L, ctx=32, 5000 stories, 1536 batch)** 👑 | **70.1%** | **1800** | **~3.2×** |
+| **TinyTransformer.py (3L, ctx=32, 5000 stories, 1536 batch)** 👑 | **70.0%** | **1600** | **~3.2×** |
 | TinyTransformer.py (3L, ctx=32, 5000 stories, warmup+clip) | 70.7% | 1600 | ~3.3× |
+| TinyTransformer.py (3L, ctx=32, 5000 stories, 2048 batch) | 70.5% | 1600 | ~4.8× |
 | microgpt_lite.py | 79.4% | 3500 | 10.2× |
 
 > **🚨 The Plot Twist (Read before judging the scores!):**
@@ -143,11 +145,12 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 | :--- | :--- | ---: | ---: | :--- |
 | **Exp** | **High LR Fast Convergence** (batch=1024) | +4.0% | 2.5× slower | ⚠️ Faster, but high LR makes training unstable. |
 | **Exp** | **Middle Ground** (batch=1536) | +6.8% | 2.7× slower | ✅ Excellent compromise. ~1 min runtime. |
-| **Exp** | **Large Batch + High LR** (batch=2048) | +7.7% | ~3.5× slower | ✅ Huge accuracy win — best raw score. |
+| **Exp** | **Large Batch + High LR** (batch=2048) | +7.7% | ~3.5× slower | ✅ Huge accuracy win — best raw score (but memorizes). |
 | **Exp** | **Dataset Size:** 1k → 3k/5k stories | −4.7% | Negligible | ✅ **The Memorization Trap:** Drops raw acc, but drastically improves grammar. |
 | **Exp** | **Context Size:** 8 → 16 (on large dataset) | −1.5% | ~1.5× slower | ✅ Fixes pronoun/gender swapping. Model can track subjects! |
 | **Exp** | **Weight Decay:** 0 → 0.01 | Neutral | Negligible | ✅ Acts as a "grammar regularizer." Stops lazy repetition. |
 | **Exp** | **Context Size:** 16 → 32 (on large dataset) | −1.6% | ~1.3× slower | ✅ The ultimate 2-min tradeoff. Fixes 90% of pronoun swaps. |
+| **Exp** | **batch=2048 on 5k stories** (ctx=32) | +0.5% vs 1536 | 1.5× slower | ❌ Same ~70% ceiling. Batch size stops helping when model is genuinely learning. |
 | **Exp** | **Inference Temp:** 0.7 → 0.5 | N/A (Inference) | N/A | ✅ Eliminates fake words (e.g., "throbe" → "robe"). |
 
 ---
@@ -209,7 +212,7 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 | 400 | 62.1% | 61.4% |
 | 800 | 66.0% | 64.4% |
 | 1200 | 67.8% | 67.8% |
-| 1600 | 69.3% | **70.1%** ⭐ |
+| 1600 | 69.3% | **70.0%** ⭐ |
 | 2000 | 71.4% | - |
 
 > 💡 **Pro-Tip:** Look at the scores! They are *lower* than Phase 3 (which hit 76.1%). But look at the generated samples below. This proves that on small datasets, high accuracy is just memorization (overfitting). If you want a model that writes well in the real world, train it on more data and accept a slightly lower eval score!
@@ -240,6 +243,31 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 > 💡 **Key Result:** Warmup + clipping produced a smoother, more monotonic learning curve and a slightly higher peak (**70.7%**), but the simpler no-warmup baseline still reached **70.0%** in less time (**127.7s**) with less code.
 
 > 💡 **Verdict:** These are valid techniques, but for this tiny model they are **not the new canonical config**. They belong in the notebook as a useful negative/edge result: standard stability tricks can help a little, but they do **not** beat simplicity enough to justify the extra moving parts.
+
+### Phase 6: Bigger Batch on Large Dataset (Does batch size help when we're not memorizing?)
+*Goal: Phase 3 showed batch=2048 was a huge win on 1k stories. Does the same trick work when we switch to 5k stories and ctx=32?*
+
+*Single change from the Phase 4 canonical config:* `batch_size 1536 → 2048`
+
+| Step | Loss | Acc | Time |
+| ---: | ---: | ---: | ---: |
+| 0 | 4.5770 | 19.2% | 0.2s |
+| 200 | 1.4332 | 56.6% | 18.7s |
+| 400 | 1.3018 | 62.2% | 38.8s |
+| 600 | 1.1745 | 64.9% | 58.6s |
+| 800 | 1.1103 | 65.7% | 77.4s |
+| 1000 | 1.0814 | 65.6% | 96.0s |
+| 1200 | 1.0087 | 68.0% | 115.0s |
+| 1400 | 0.9984 | 69.2% | 134.3s |
+| 1600 | 0.9760 | **70.5%** ⭐ | 153.3s |
+| 1800 | 0.8941 | 70.3% | 172.3s |
+| 2000 | 0.9301 | 70.4% | 191.2s |
+
+**Training time: 191.2s**
+
+> 💡 **Key Result:** Peak accuracy is **70.5%** — essentially the same ~70% ceiling as the 1536-batch canonical config, but taking **191s vs 128s** (50% more time). The batch size increase bought nothing.
+
+> 💡 **The Insight — Why batch size stops working:** On 1k stories, a bigger batch helped because it let the model memorize more patterns per step. On 5k stories, the model is genuinely *learning* rather than memorising, so the bottleneck has shifted. More data-per-step doesn't help if the model has already extracted everything it can from its 2.4M parameters. The ceiling is a **capacity ceiling**, not an optimisation ceiling. Breaking it requires more parameters or architectural changes — not a bigger batch.
 
 ---
 
@@ -309,8 +337,14 @@ Here, we dive deep into the specific upgrades, setting adjustments, and feature 
 #### Phase 4: Optimizer Stability
 **10. LR Warmup + Gradient Clipping**
 *   **The Change:** Added a 50-step linear LR warmup (via `SequentialLR` chaining `LinearLR` → `CosineAnnealingLR`) and gradient clipping (`clip_grad_norm_(params, 1.0)`) on every backward pass. Applied on top of the Phase 4 winning config (3L, ctx=32, 5k stories, batch=1536, lr=2e-3).
-*   **Result:** Peak accuracy improved from **70.1% → 70.7%** at step 1600, but the simpler cosine-only version still reached **70.0%** in less time and with less code.
+*   **Result:** Peak accuracy improved from **70.0% → 70.7%** at step 1600, but the simpler cosine-only version still reached **70.0%** in less time and with less code.
 *   **The Takeaway:** Warmup and clipping are still useful teaching examples because they show that standard optimizer tricks can smooth training. But at this scale, they are a **marginal optimization**, not a must-have. The simpler code wins on clarity-to-benefit ratio.
+
+#### Phase 5: The Capacity Ceiling
+**11. Large Batch (2048) on 5k Stories**
+*   **The Change:** Increased `batch_size` from 1536 → 2048 on the Phase 4 canonical config (3L, ctx=32, 5k stories, lr=2e-3). All other hyperparameters unchanged.
+*   **Result:** Peak accuracy **70.5%** at step 1600, training time **191.2s** — compared to 70.0% / 127.7s for the 1536-batch baseline. Same ceiling, 50% more time.
+*   **The Takeaway:** On the 1k-story dataset, bigger batches helped because the model was memorizing — more examples per step = faster memorization. On 5k stories the model is genuinely learning, so optimisation speed is no longer the bottleneck. The ~70% ceiling is a **model capacity** limit. To break it, we need to change the architecture (more parameters, more heads, wider FFN) — not the batch size.
 
 ---
 
@@ -362,9 +396,13 @@ Numbers are great, but what does the AI actually write? Here are samples from ou
 > `Once there was a great time and she was green and strong. Tim and Sue were so happy that the box opened the bug friends. She was sad and looked for them. He grabbed the box of the went to help his mom came in`
 *(Notice how much better the clauses flow compared to the 76.1% champion. It learned structure, not just memorized words!)*
 
-**TinyTransformer.py - 3L, 1536 batch, 5k stories, ctx=32 (70.1% Acc - Current Simplicity Champion 👑)**
+**TinyTransformer.py - 3L, 1536 batch, 5k stories, ctx=32 (70.0% Acc - Simplicity Champion 👑)**
 > `Once there was a little boy named Tim. He was so happy. The dog was scared and happy. They saw a little girl who liver seen the ball. She lived in a big branch with the ball and went to the park. They are happy and started to share`
-*(This is the cleanest clarity-to-performance tradeoff in the repo: simple code, no warmup boilerplate, and nearly identical accuracy to the more complex stability variant.)*
+*(Cleanest code, fastest training at 127.7s, same ~70% ceiling as more complex variants.)*
+
+**TinyTransformer.py - 3L, 2048 batch, 5k stories, ctx=32 (70.5% Acc - Phase 6: Capacity Ceiling Confirmed)**
+> `Once there was a little boy named Tim. Tim was very happy to have fun! The dog said, "I will help you find her friends. The boy and her friends with the road. She saw a big ball. They saw a big back to the tree. They played together`
+*(Output quality is indistinguishable from the 1536-batch run despite 50% more training time. Confirms the ceiling is model capacity, not optimisation.)*
 
 **TinyTransformer.py - 3L, 1536 batch, 5k stories, ctx=32, warmup+clip (70.7% Acc - Stability Variant)**
 > `Once there was a little boy named Tim. Tim was so happy to ho excited to show the water. The bird said, "Thank you sad and wanted to be kind out the little girl became good friends. They liked to play with the park.`
