@@ -8,9 +8,9 @@ Our baseline model is **TinyTransformer.py** (a 2-layer transformer, float16 pre
 
 ## 📌 Contents
 
-- [🧬 Lineage: From TorchMLP to TinyTransformer](#-lineage-from-torchmlp-to-tinytransformer)
-- [🔬 The Scientific Method: How We Trust Our Data](#-the-scientific-method-how-we-trust-our-data)
 - [🧠 How to Read This Document](#-how-to-read-this-document)
+- [🔬 The Scientific Method: How We Trust Our Data](#-the-scientific-method-how-we-trust-our-data)
+- [🧬 Lineage: From TorchMLP to TinyTransformer](#-lineage-from-torchmlp-to-tinytransformer)
 - [🔧 The Default Stack: What Changed from SimpleTransformer](#-the-default-stack-what-changed-from-simpletransformer)
 - [📊 The Leaderboard: Model Comparison](#-the-leaderboard-model-comparison)
 - [🔬 Ablation & Experiment Summary](#-ablation--experiment-summary)
@@ -29,8 +29,27 @@ Our baseline model is **TinyTransformer.py** (a 2-layer transformer, float16 pre
 - [📝 Experiment & Ablation Details](#-experiment--ablation-details)
   - [🏗️ Theme 1: Architecture Choices (Shape, Size, & Encoding)](#%EF%B8%8F-theme-1-architecture-choices-shape-size--encoding)
   - [⚡ Theme 2: Speed, Training, & Optimization Hacks](#-theme-2-speed-training--optimization-hacks)
-  - [🧠 Theme 3: The "Real Intelligence" Push (Data, Context, & Regularization)](#-theme-3-the-real-intelligence-push-data-context--regularization)
+  - [🧠 Theme 3: The "Real Intelligence" Push (Batch, Context & Data)](#-theme-3-the-real-intelligence-push-batch-context--data)
 - [📖 Generated Samples (Seeing is Believing)](#-generated-samples-seeing-is-believing)
+
+---
+
+## 🧠 How to Read This Document
+
+Before we dive in, here are two key scientific concepts we use to test AI models. Think of the model like a recipe or a PC build:
+
+*   **🧪 Experiment:** Trying a *new feature* or *upgrading a setting* to see if it makes the model better. (e.g., *"What if we add more layers to the model's brain?"* or *"What if we double the memory?"*)
+*   **✂️ Ablation:** Taking an existing feature *away* to prove that it's actually necessary. It's like removing the baking powder from a cake recipe to see if it actually matters. If the cake goes flat, you proved the baking powder matters! (e.g., *"What if we remove the model's ability to know word order?"*)
+
+---
+
+## 🔬 The Scientific Method: How We Trust Our Data
+
+In AI, it is very easy to fool yourself. Here are the three rules we use to make sure our experiments are scientifically valid:
+
+*   **🎲 The Starting Seed (`torch.manual_seed`):** Neural networks start with random guesses. The specific random guess you start with changes your final score slightly. We hardcode the seed so our experiments are **reproducible**.
+*   **🎯 The Eval Seed:** When we test the model every 200 steps, we don't test it on the whole dataset (it would run out of GPU memory). We grab a random subset. But if the subset changes every time, our accuracy will "wobble" up and down based on luck! We fixed this by creating a dedicated `eval_rng`. Now, the model is *always* tested on the exact same 4,096 stories.
+*   **✂️ The Golden Rule:** Change **only one thing at a time**. If we add a layer AND double the batch size, and the model gets better, which one caused it? We won't know. Science requires isolation.
 
 ---
 
@@ -131,25 +150,6 @@ The full three-file lineage looks like this:
 | **Architecture** | 2-layer MLP | 3-layer MLP + embeddings | 2-layer transformer + attention |
 | **Custom forward** | No | Yes (embed + flatten) | Yes (full transformer loop) |
 | **`torch.compile`** | No | No | Yes |
-
----
-
-## 🔬 The Scientific Method: How We Trust Our Data
-
-In AI, it is very easy to fool yourself. Here are the three rules we use to make sure our experiments are scientifically valid:
-
-*   **🎲 The Starting Seed (`torch.manual_seed`):** Neural networks start with random guesses. The specific random guess you start with changes your final score slightly. We hardcode the seed so our experiments are **reproducible**.
-*   **🎯 The Eval Seed:** When we test the model every 200 steps, we don't test it on the whole dataset (it would run out of GPU memory). We grab a random subset. But if the subset changes every time, our accuracy will "wobble" up and down based on luck! We fixed this by creating a dedicated `eval_rng`. Now, the model is *always* tested on the exact same 4,096 stories.
-*   **✂️ The Golden Rule:** Change **only one thing at a time**. If we add a layer AND double the batch size, and the model gets better, which one caused it? We won't know. Science requires isolation.
-
----
-
-## 🧠 How to Read This Document
-
-Before we dive in, here are two key scientific concepts we use to test AI models. Think of the model like a recipe or a PC build:
-
-*   **🧪 Experiment:** Trying a *new feature* or *upgrading a setting* to see if it makes the model better. (e.g., *"What if we add more layers to the model's brain?"* or *"What if we double the memory?"*)
-*   **✂️ Ablation:** Taking an existing feature *away* to prove that it's actually necessary. It's like removing the baking powder from a cake recipe to see if it actually matters. If the cake goes flat, you proved the baking powder matters! (e.g., *"What if we remove the model's ability to know word order?"*)
 
 ---
 
@@ -455,7 +455,7 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 
 ## 📝 Experiment & Ablation Details
 
-Here, we dive deep into the specific upgrades, setting adjustments, and feature removals we tested to find the ultimate small-scale language model. We have categorized these investigations into three primary thematic blocks.
+Here, we dive deep into the specific upgrades, setting adjustments, and feature removals we tested to find the ultimate small-scale language model. We have categorized these investigations into three primary thematic blocks, matching the [Ablation & Experiment Summary](#-ablation--experiment-summary) tables above.
 
 ### 🏗️ Theme 1: Architecture Choices (Shape, Size, & Encoding)
 
@@ -469,104 +469,94 @@ Here, we dive deep into the specific upgrades, setting adjustments, and feature 
 *   **Result:** Despite having 50% fewer parameters, the taller, skinnier model actually *beat* the wider baseline's accuracy by +1.0% (69.1% vs 68.1%).
 *   **The Takeaway:** Depth is incredibly powerful for reasoning and context. A deeper, narrow network generalizes and learns compositional rules better than a shallow, wide model because it has more sequential processing steps to refine features.
 
-**3. Weight Tying (Parameter Sharing)**
-*   **The Feature Removed/The Change:** We forced the "input reading" layer (token embedding) and the "output guessing" layer (linear head) to share the exact same weights (`linear.weight = tok_embed.weight`), reducing parameter overhead.
-*   **Result:** Accuracy dropped by 3.0%, and the starting loss exploded at step 0 to over 250!
-*   **The Takeaway:** Weight tying is a great trick for massive models with huge 50,000-word vocabularies because it saves millions of parameters. But on our tiny 65-character alphabet, it just confuses the model because the layers have mismatched initialization needs (Kaiming uniform for linear projection vs. normal distribution for embeddings).
-
-**4. Positional Embeddings**
-*   **The Feature Removed:** We removed the code that tells the AI the order of the letters. The AI now sees "tac" and "cat" as the exact same thing.
-*   **Result:** Accuracy crashed by 7.7%. 
-*   **The Takeaway:** Transformers are like a person reading a handful of Scrabble tiles scattered on a table. By default, they see all the letters but have no concept of left-to-right order. Without Positional Embeddings, the AI is just looking at "word soup." Order matters!
-
-**3. Context Size (8 vs 64 characters)**
-*   **The Change:** We gave the model a bigger "short-term memory," letting it look at 64 characters at once instead of 8.
-*   **Result:** Accuracy barely moved (+1.1%), but training time exploded from 25s to 197s!
-*   **The Takeaway:** Attention math scales quadratically (if you double the context, you quadruple the math). 8x the context meant 7.8x the time. This is exactly why researchers invented "Flash Attention" to fix this later.
-
-**4. Float16 vs Bfloat16 Precision**
-*   **The Change:** We swapped standard float16 math for bfloat16 (a newer format that handles big numbers better).
-*   **Result:** bfloat16 was 4.2× slower on our T4 GPU!
-*   **The Takeaway:** Hardware matters. The older T4 GPU doesn't have physical circuits for bfloat16, so it fakes it using float32, which is slow. 
-
-**5. GELU vs ReLU Activation**
-*   **The Change:** We swapped ReLU (a simple "if negative, make zero" math rule) for GELU (a complex curve used in GPT models).
-*   **Result:** Identical accuracy, but 14% slower.
-*   **The Takeaway:** Don't use complex math if simple math works just as well. GELU's complex calculations slowed the GPU down with no benefit at this small scale.
-
-#### Phase 2: The Training Hacks
-**6. Large Batch + High LR (3 Layers, 2048 batch)**
-*   **The Change:** Instead of making the model bigger, we doubled the **batch size** (data processed at once) from 1024 → 2048 and doubled the **learning rate** from 1e-3 → 2e-3 to match.
-*   **Result:** A new best raw score: **76.1% at step 2200**. 
-*   **The Takeaway:** For this dataset, **more data per step mattered more than more parameters**. 
-
-**7. The Memorization Trap (Dataset Size: 1k → 3k/5k)**
-*   **The Change:** We expanded `num_stories` from 1,000 to 5,000.
-*   **Result:** The raw accuracy score dropped from 76.1% down to 71.4%. However, the generated text improved dramatically. The 76.1% model produced word salad ("the cake was so smaller saw a big"), while the 5,000-story model produced clean clauses.
-*   **The Takeaway:** With only 1,000 stories, the model sees the exact same evaluation stories so many times that it just memorizes the answers. It "hacks" the test. Expanding the dataset forces the AI to learn the underlying *rules* of English grammar to succeed.
-
-#### Phase 3: The Coherence Push
-**8. Context is King for Semantics (8 → 16 → 32 characters)**
-*   **The Change:** We doubled `context_size` from 8 to 16, and then to 32, giving the AI a 5-6 word short-term memory.
-*   **Result:** The AI stopped swapping pronouns mid-sentence. It could finally remember "named Lily" long enough to correctly use "She" later in the sentence.
-*   **The Takeaway:** 8 characters is barely 1.5 words. The AI literally could not see the subject of the sentence by the time it wrote the verb. 32 characters fixes the "amnesia" while still fitting inside the 2-minute Colab budget!
-
-**9. Mild Weight Decay & Inference Temperature**
-*   **The Change:** We added a tiny amount of `weight_decay=0.01` to the optimizer, and lowered the generation `temperature` from 0.7 to 0.5.
-*   **Result:** Weight decay stopped the model from repeating the same phrases over and over. The lower temperature stopped the model from making risky, weird guesses that resulted in fake words like "throbe" (turning it into the real word "robe").
-*   **The Takeaway:** Training is only half the battle. A little regularization during training, and conservative sampling during generation, polishes the final output.
-
-#### Phase 4: Optimizer Stability
-**10. LR Warmup + Gradient Clipping**
-*   **The Change:** Added a 50-step linear LR warmup (via `SequentialLR` chaining `LinearLR` → `CosineAnnealingLR`) and gradient clipping (`clip_grad_norm_(params, 1.0)`) on every backward pass. Applied on top of the Phase 4 winning config (3L, ctx=32, 5k stories, batch=1536, lr=2e-3).
-*   **Result:** Peak accuracy improved from **70.0% → 70.7%** at step 1600, but the simpler cosine-only version still reached **70.0%** in less time and with less code.
-*   **The Takeaway:** Warmup and clipping are still useful teaching examples because they show that standard optimizer tricks can smooth training. But at this scale, they are a **marginal optimization**, not a must-have. The simpler code wins on clarity-to-benefit ratio.
-
-#### Phase 5: The Capacity Ceiling
-**11. Large Batch (2048) on 5k Stories**
-*   **The Change:** Increased `batch_size` from 1536 → 2048 on the Phase 4 canonical config (3L, ctx=32, 5k stories, lr=2e-3). All other hyperparameters unchanged.
-*   **Result:** Peak accuracy **70.5%** at step 1600, training time **191.2s** — compared to 70.0% / 127.7s for the 1536-batch baseline. Same ceiling, 50% more time.
-*   **The Takeaway:** On the 1k-story dataset, bigger batches helped because the model was memorizing — more examples per step = faster memorization. On 5k stories the model is genuinely learning, so optimisation speed is no longer the bottleneck. The ~70% ceiling is a **model capacity** limit. To break it, we need to change the architecture (more parameters, more heads, wider FFN) — not the batch size.
-
-**12. More Attention Heads (4 → 8)**
+**3. More Attention Heads (4 → 8)**
 *   **The Change:** Increased `n_heads` from 4 to 8 while keeping `embed_dim=256`, `ffn_dim=1024`, `n_layers=3`, `ctx=32`, `batch=1536`, and `num_stories=5000` fixed.
 *   **Result:** Peak accuracy reached **70.5%** at step 1800, but training time rose to **182.8s**.
-*   **The Takeaway:** Doubling the number of heads did not unlock better reasoning or longer-range tracking. It mostly added overhead while landing on the same ceiling as other recent runs. This points to a broader architecture limit rather than an attention-head bottleneck.
+*   **The Takeaway:** Doubling the number of heads did not unlock better reasoning or longer-range tracking. It mostly added overhead while landing on the same ceiling as other recent runs. This points to a broader architecture limit rather than an attention-head bottleneck. *(See Theme 3, item 5 for the matching batch-size experiment that hit the same ceiling.)*
 
-**13. Wider Embeddings (embed_dim 256 → 320)**
+**4. Wider Embeddings (embed_dim 256 → 320)**
 *   **The Change:** Increased `embed_dim` from 256 to 320, growing parameters from 2.41M to 3.26M (+35%). Required lowering `lr` from 2e-3 to 1e-3 and adding gradient clipping to prevent NaN divergence.
 *   **Result:** Peak accuracy **70.5%** at step 1600, training time **218.0s**.
 *   **The Takeaway:** A 35% bigger model with 860K more parameters produced **zero improvement**. Combined with the batch and heads experiments, this definitively proves the ~70% ceiling is an **information bottleneck** (character-level ctx=32 ≈ 5 words), not a capacity bottleneck. To break it, you need a better input representation (subword tokenization), not a bigger model.
 
----
+> 💡 **The Definitive Result:** Three completely different approaches — bigger batch (+33% data/step, Theme 3 item 5), more heads (+100% attention patterns, item 3 above), and wider model (+35% parameters / +860K params, item 4 above) — all converged on **exactly 70.5%**. This is not coincidence; it is the **information ceiling** of character-level tokenization at ctx=32 (~5-6 words of context). No amount of model capacity can extract more signal than exists in a 5-word window.
+>
+> 💡 **The NaN Lesson:** The wider model (embed=320) immediately diverged to NaN at `lr=2e-3` with no clipping. This is the first experiment where gradient clipping became *necessary*, not optional — larger embeddings produce larger gradients that destabilize the optimizer before it can warm up.
+>
+> 💡 **The torch.compile Warning:** The embed=320 run triggered `torch._dynamo` recompilation warnings (hit config limit of 8). This is caused by the eval loop toggling `autocast` on/off, forcing graph recompilation. Part of the slowdown beyond just bigger matrices.
 
-### ✂️ ABLATION: Proving What Matters
-*This test removes a crucial feature to prove why the AI needs it in the first place.*
-
-**1. Ablation: Positional Embeddings**
+**5. Positional Embeddings (Ablation)**
 *   **The Feature Removed:** We removed the code that tells the AI the order of the letters. The AI now sees "tac" and "cat" as the exact same thing.
 *   **Result:** Accuracy crashed by 7.7%. 
 *   **The Takeaway:** Transformers are like a person reading a handful of Scrabble tiles scattered on a table. By default, they see all the letters but have no concept of left-to-right order. Without Positional Embeddings, the AI is just looking at "word soup." Order matters!
 
-**2. Ablation: Weight Tying (Parameter Sharing)**
+---
+
+### ⚡ Theme 2: Speed, Training, & Optimization Hacks
+
+**1. Weight Tying (Parameter Sharing)**
 *   **The Feature Removed/The Change:** We forced the "input reading" layer (token embedding) and the "output guessing" layer (linear head) to share the exact same weights (`linear.weight = tok_embed.weight`), reducing parameter overhead.
 *   **Result:** Accuracy dropped by 3.0%, and the starting loss exploded at step 0 to over 250!
 *   **The Takeaway:** Weight tying is a great trick for massive models with huge 50,000-word vocabularies because it saves millions of parameters. But on our tiny 65-character alphabet, it just confuses the model because the layers have mismatched initialization needs (Kaiming uniform for linear projection vs. normal distribution for embeddings).
 
-**3. Ablation: Last-Word vs. Full-Sequence Causal Loss**
+**2. Context Size (8 vs 64 characters)**
+*   **The Change:** We gave the model a bigger "short-term memory," letting it look at 64 characters at once instead of 8.
+*   **Result:** Accuracy barely moved (+1.1%), but training time exploded from 25s to 197s!
+*   **The Takeaway:** Attention math scales quadratically (if you double the context, you quadruple the math). 8x the context meant 7.8x the time. This is exactly why researchers invented "Flash Attention" to fix this later.
+
+**3. Precision: Float16 vs Bfloat16**
+*   **The Change:** We swapped standard float16 math for bfloat16 (a newer format that handles big numbers better).
+*   **Result:** bfloat16 was 4.2× slower on our T4 GPU!
+*   **The Takeaway:** Hardware matters. The older T4 GPU doesn't have physical circuits for bfloat16, so it fakes it using float32, which is slow. 
+
+**4. Activation: GELU vs ReLU**
+*   **The Change:** We swapped ReLU (a simple "if negative, make zero" math rule) for GELU (a complex curve used in GPT models).
+*   **Result:** Identical accuracy, but 14% slower.
+*   **The Takeaway:** Don't use complex math if simple math works just as well. GELU's complex calculations slowed the GPU down with no benefit at this small scale.
+
+**5. Loss: Last-Word vs. Full-Sequence Causal Loss**
 *   **The Feature Removed/The Change:** Instead of only calculating the loss on the very last predicted token, we applied a causal mask and calculated the loss across all 8 sequence positions, producing 8× more training feedback per batch.
 *   **Result:** The model learned much faster early in training (+3.7% accuracy at step 200), but plateaued at the same ~67.6% final accuracy ceiling while taking 1.47× longer to train.
 *   **The Takeaway:** Asking the model to predict *every* token in the sentence (the standard way GPT models learn) dramatically improves sample-efficiency early on. However, for a small architecture, it doesn't raise the ultimate accuracy ceiling—it just helps the model reach it faster at the cost of heavier step-by-step math.
 
-**4. Ablation/Experiment: Narrow/Deep vs. Wide/Short Shape**
-*   **The Feature Removed/The Change:** We halved the model's width (`embed_dim` 256 → 128, `ffn_dim` 1024 → 512) and doubled its depth (2 → 4 layers), cutting the total parameters in half from 1.6M to 0.8M parameters.
-*   **Result:** Despite having 50% fewer parameters, the taller, skinnier model actually *beat* the wider baseline's accuracy by +1.0% (69.1% vs 68.1%).
-*   **The Takeaway:** Depth is incredibly powerful for reasoning and context. A deeper, narrow network generalizes and learns compositional rules better than a shallow, wide model because it has more sequential processing steps to refine features.
-
-**5. Ablation/Experiment: Flash/SDPA Attention & Context Scaling**
+**6. Flash/SDPA Attention + Context Scaling**
 *   **The Feature Removed/The Change:** We activated PyTorch's native Scaled Dot-Product Attention (SDPA) with Memory-Efficient Flash attention kernels and expanded the context size from 8 to 32 characters on the Narrow-Deep model.
 *   **Result:** It ran 2.6× faster than the naive long-context approach (confirming the O(T²) attention bottleneck was successfully bypassed!), but final accuracy only improved by +0.2% and training took 3.2× longer than the 8-character context.
 *   **The Takeaway:** Memory-efficient attention math works beautifully, but context windows are only as good as the model's capacity. Bumping the memory window to 32 characters on a skinny 128-dimension model provides more information than its small "brain" can physically encode or utilize.
+
+**7. LR Warmup + Gradient Clipping**
+*   **The Change:** Added a 50-step linear LR warmup (via `SequentialLR` chaining `LinearLR` → `CosineAnnealingLR`) and gradient clipping (`clip_grad_norm_(params, 1.0)`) on every backward pass. Applied on top of the Phase 4 winning config (3L, ctx=32, 5k stories, batch=1536, lr=2e-3).
+*   **Result:** Peak accuracy improved from **70.0% → 70.7%** at step 1600, but the simpler cosine-only version still reached **70.0%** in less time and with less code.
+*   **The Takeaway:** Warmup and clipping are still useful teaching examples because they show that standard optimizer tricks can smooth training. But at this scale, they are a **marginal optimization**, not a must-have. The simpler code wins on clarity-to-benefit ratio.
+
+---
+
+### 🧠 Theme 3: The "Real Intelligence" Push (Batch, Context & Data)
+
+**1. Large Batch + High LR (3 Layers, 2048 batch)**
+*   **The Change:** Instead of making the model bigger, we doubled the **batch size** (data processed at once) from 1024 → 2048 and doubled the **learning rate** from 1e-3 → 2e-3 to match.
+*   **Result:** A new best raw score: **76.1% at step 2200**. 
+*   **The Takeaway:** For this dataset, **more data per step mattered more than more parameters**. 
+
+**2. The Memorization Trap (Dataset Size: 1k → 3k/5k)**
+*   **The Change:** We expanded `num_stories` from 1,000 to 5,000.
+*   **Result:** The raw accuracy score dropped from 76.1% down to 71.4%. However, the generated text improved dramatically. The 76.1% model produced word salad ("the cake was so smaller saw a big"), while the 5,000-story model produced clean clauses.
+*   **The Takeaway:** With only 1,000 stories, the model sees the exact same evaluation stories so many times that it just memorizes the answers. It "hacks" the test. Expanding the dataset forces the AI to learn the underlying *rules* of English grammar to succeed.
+
+**3. Context is King for Semantics (8 → 16 → 32 characters)**
+*   **The Change:** We doubled `context_size` from 8 to 16, and then to 32, giving the AI a 5-6 word short-term memory.
+*   **Result:** The AI stopped swapping pronouns mid-sentence. It could finally remember "named Lily" long enough to correctly use "She" later in the sentence.
+*   **The Takeaway:** 8 characters is barely 1.5 words. The AI literally could not see the subject of the sentence by the time it wrote the verb. 32 characters fixes the "amnesia" while still fitting inside the 2-minute Colab budget!
+
+**4. Mild Weight Decay & Inference Temperature**
+*   **The Change:** We added a tiny amount of `weight_decay=0.01` to the optimizer, and lowered the generation `temperature` from 0.7 to 0.5.
+*   **Result:** Weight decay stopped the model from repeating the same phrases over and over. The lower temperature stopped the model from making risky, weird guesses that resulted in fake words like "throbe" (turning it into the real word "robe").
+*   **The Takeaway:** Training is only half the battle. A little regularization during training, and conservative sampling during generation, polishes the final output.
+
+**5. Large Batch (2048) on 5k Stories (Capacity Ceiling)**
+*   **The Change:** Increased `batch_size` from 1536 → 2048 on the Phase 4 canonical config (3L, ctx=32, 5k stories, lr=2e-3). All other hyperparameters unchanged.
+*   **Result:** Peak accuracy **70.5%** at step 1600, training time **191.2s** — compared to 70.0% / 127.7s for the 1536-batch baseline. Same ceiling, 50% more time.
+*   **The Takeaway:** On the 1k-story dataset, bigger batches helped because the model was memorizing — more examples per step = faster memorization. On 5k stories the model is genuinely learning, so optimisation speed is no longer the bottleneck. The ~70% ceiling is a **model capacity** limit. To break it, we need to change the architecture (more parameters, more heads, wider FFN) — not the batch size. *(See Theme 1, items 3-4 for the matching head-count and embedding-width experiments that hit the same ceiling.)*
 
 ---
 
