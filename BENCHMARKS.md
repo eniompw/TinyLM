@@ -71,23 +71,17 @@ Only two hyperparameters were adjusted when moving from MLP to Transformer:
 Everything else that's new in the first Transformer version — the 2-layer encoder (4 heads,
 `ffn_dim=1024`), `torch.compile`, float16 autocast + `GradScaler`, fused AdamW,
 `zero_grad(set_to_none=True)`, cosine LR schedule (`eta_min=1e-4`), gradient clipping (`1.0`),
-and inference temperature (`0.7`) — was **not** discovered through ablations here. It was ported
-directly from the author's own [MicroGPT](https://github.com/eniompw/MicroGPT) research notes.
-One idea from those notes, AdamW `betas=(0.9, 0.95)`, was documented but deliberately left at
-PyTorch defaults in the initial version. These notes themselves drew heavily from
-[Keller Jordan's modded-nanogpt speedrun](https://github.com/KellerJordan/modded-nanogpt),
-making `TinyTransformer.py` a two-hop descendant of that work.
+and inference temperature (`0.7`) — was **not** discovered through ablations here. These features
+were adopted directly from [Keller Jordan's modded-nanogpt speedrun](https://github.com/KellerJordan/modded-nanogpt),
+a record-breaking GPT-2 training optimization repo that served as the direct inspiration for
+`TinyTransformer.py`. One idea from that speedrun, AdamW `betas=(0.9, 0.95)`, was documented but
+deliberately left at PyTorch defaults in the initial version.
 
 This is why Phase 1 treats `TinyMLP.py` / `TorchMLP.py` as prior-generation reference points
 rather than unrelated models: `TinyTransformer.py` is a direct descendant of the MLP baseline
 with attention layered on top.
 
 ### 🔗 The Keller Jordan Influence
-
-Many of the "inherited from MicroGPT" defaults in `TinyTransformer.py` trace back further —
-to [Keller Jordan's modded-nanogpt](https://github.com/KellerJordan/modded-nanogpt), a
-record-breaking GPT-2 speedrun repo. `MicroGPT` was directly inspired by that work, and
-`TinyTransformer.py` inherits those ideas through it.
 
 The following features in `TinyTransformer.py` are Keller-lineage ideas:
 
@@ -129,11 +123,11 @@ The rename introduced two structural improvements:
 
 The full three-file lineage looks like this:
 
-| | `torch_mlp_sequential` | `TorchMLP` | `microgpt_lite` |
+| | `torch_mlp_sequential` | `TorchMLP` | `TinyTransformer` |
 | :--- | :--- | :--- | :--- |
-| **Weight management** | `nn.Linear` | `nn.Linear` | Raw tensors + `F.linear` |
+| **Weight management** | `nn.Linear` | `nn.Linear` | `nn.Linear` |
 | **Optimizer** | Manual SGD | SGD | AdamW + cosine LR + GradScaler |
-| **Architecture** | 2-layer MLP | 3-layer MLP + embeddings | 6-layer transformer + attention |
+| **Architecture** | 2-layer MLP | 3-layer MLP + embeddings | 2-layer transformer + attention |
 | **Custom forward** | No | Yes (embed + flatten) | Yes (full transformer loop) |
 | **`torch.compile`** | No | No | Yes |
 
@@ -171,7 +165,7 @@ The canonical TinyTransformer config isn't just bigger hyperparameters — it al
 | **Fixed `eval_rng`** | ❌ Full dataset eval every 200 steps | ✅ Dedicated `eval_rng` generator, 4096-sample subset | Eliminates accuracy wobble | Faster per-eval (4096 vs full dataset) | Scientific Method section: "stops accuracy wobble" |
 | **Inference temp** | 0.7 (hardcoded) | 0.5 (parameterized) | N/A (inference only) | N/A | Experiment: eliminates fake words ("throbe" → "robe") |
 
-> 💡 **The takeaway:** `torch.compile` + `float16` are the **speed engine** — together they make the 2-minute Colab budget possible. `CosineAnnealingLR` + `AdamW`/`weight_decay` are the **quality polish** — they don't raise the accuracy ceiling but make training more stable and output cleaner. `eval_rng` is the **scientific control** — it makes the numbers trustworthy. All five were inherited from the [MicroGPT](https://github.com/eniompw/MicroGPT) lineage, not discovered through ablation — but every adjacent experiment confirmed these are the right defaults.
+> 💡 **The takeaway:** `torch.compile` + `float16` are the **speed engine** — together they make the 2-minute Colab budget possible. `CosineAnnealingLR` + `AdamW`/`weight_decay` are the **quality polish** — they don't raise the accuracy ceiling but make training more stable and output cleaner. `eval_rng` is the **scientific control** — it makes the numbers trustworthy. All five trace back to [Keller Jordan's modded-nanogpt](https://github.com/KellerJordan/modded-nanogpt), not discovered through ablation — but every adjacent experiment confirmed these are the right defaults.
 
 ---
 
@@ -202,7 +196,6 @@ The canonical TinyTransformer config isn't just bigger hyperparameters — it al
 | TinyTransformer.py (3L, ctx=32, 5000 stories, 2048 batch) | 70.5% | 1600 | ~4.8× |
 | TinyTransformer.py (3L, ctx=32, 5000 stories, 8 heads) | 70.5% | 1800 | ~4.6× |
 | TinyTransformer.py (3L, ctx=32, 5000 stories, embed=320) | 70.5% | 1600 | ~5.5× |
-| microgpt_lite.py | 79.4% | 3500 | 10.2× |
 
 > **🚨 The Plot Twist (Read before judging the scores!):**
 > Look at the bottom rows. Why did accuracy go *down* to ~70%? Because we expanded the dataset from 1,000 to 5,000 stories. The 76.1% model was cheating—it memorized the test. The ~70% models stopped memorizing and actually learned English. **Lower accuracy score = higher real-world intelligence!**
@@ -265,14 +258,13 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 ### Phase 1: The Baselines (Where we started)
 *Goal: See if our basic Transformer architecture beats the older, simpler models.*
 
-| Step | NameSLP | TinyMLP | SimpleTrans | **2L (Baseline)** | microgpt |
-| ---: | ---: | ---: | ---: | ---: | ---: |
-| 0 | 3.5% | 4.7% | 4.0% | 19.3% | 1.7% |
-| 200 | 37.1% | 44.8% | 53.5% | 54.8% | 53.6% |
-| 800 | 38.9% | 55.0% | 62.4% | 63.2% | 71.4% |
-| 1600 | 39.5% | 58.3% | 66.2% | 67.0% | 76.0% |
-| 2000 | **39.6%** ⭐ | **59.4%** ⭐ | **67.2%** ⭐ | 67.4% | 77.0% |
-| 3500 | - | - | - | - | **79.4%** ⭐ |
+| Step | NameSLP | TinyMLP | SimpleTrans | **2L (Baseline)** |
+| ---: | ---: | ---: | ---: | ---: |
+| 0 | 3.5% | 4.7% | 4.0% | 19.3% |
+| 200 | 37.1% | 44.8% | 53.5% | 54.8% |
+| 800 | 38.9% | 55.0% | 62.4% | 63.2% |
+| 1600 | 39.5% | 58.3% | 66.2% | 67.0% |
+| 2000 | **39.6%** ⭐ | **59.4%** ⭐ | **67.2%** ⭐ | 67.4% |
 
 ### Phase 2: Shape & Size Tests (Does depth or width matter more?)
 *Goal: Find out if adding layers, widening the brain, or changing the shape gives us better accuracy than the 2L Baseline.*
@@ -568,6 +560,3 @@ Numbers are great, but what does the AI actually write? Here are samples from ou
 **TinyTransformer.py - 3L, 1536 batch, 5k stories, ctx=32, embed=320 (70.5% Acc - Capacity Ceiling Proof)**
 > `Once there was a little boy named Tim. He was so happy to share best climbed the pictures. She was time, they went to the park. It said, "Thank you, they go to the park. They are happy to have a new friends. The bird was sad and sai`
 *(35% more parameters, same 70.5% ceiling, 70% more training time. The model has more capacity than it has information to use.)*
-
-**microgpt_lite.py (79.4% Acc - Nearly perfect TinyStory)**
-> `Once upon a time, there was a little boy named Tim. He loved to measure his favorite toy. One day, he saw a big, deep broken shirt. He thought it would be fun to play with it.`
