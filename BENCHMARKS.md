@@ -11,7 +11,8 @@ Our baseline model is **TinyTransformer.py** (a 2-layer transformer, float16 pre
 - [🧬 Lineage: From TorchMLP to TinyTransformer](#-lineage-from-torchmlp-to-tinytransformer)
 - [🔬 The Scientific Method: How We Trust Our Data](#-the-scientific-method-how-we-trust-our-data)
 - [🧠 How to Read This Document](#-how-to-read-this-document)
-- [📊 The Leaderboard: Model Comparison](#-the-leaderboard-model-comparison)
+- [� The Default Stack: Why These Four Lines](#-the-default-stack-why-these-four-lines)
+- [�📊 The Leaderboard: Model Comparison](#-the-leaderboard-model-comparison)
 - [🔬 Ablation & Experiment Summary](#-ablation--experiment-summary)
   - [🏗️ Architecture (Shape & Size)](#%EF%B8%8F-architecture-shape--size)
   - [⚡ Training & Speed Hacks](#-training--speed-hacks)
@@ -127,7 +128,22 @@ Before we dive in, here are two key scientific concepts we use to test AI models
 
 ---
 
-## 📊 The Leaderboard: Model Comparison
+## � The Default Stack: Why These Four Lines
+
+The canonical config relies on four inherited settings. Each costs exactly one line of code. Here's what they actually do, based on the experiments in this notebook:
+
+| Component | What It Does | Accuracy Impact | Speed Impact | SLOC | Proven By |
+| :--- | :--- | :--- | :--- | :---: | :--- |
+| **`torch.compile`** | JIT-compiles the model graph into optimized GPU kernels | Neutral | **~2.3× faster** | 1 | Direct ablation (Cold vs Warm) |
+| **float16 autocast** | Halves memory bandwidth by using 16-bit math | Neutral | Major (enables large batches) | 1 | bfloat16 ablation was 4.2× slower for +0.2% |
+| **`CosineAnnealingLR`** | Smoothly decays LR from 2e-3 → 1e-4 over training | +0.6% vs no scheduler (implied) | ~0 | 1 | Phase 5: adding warmup *on top* only gained +0.6%, meaning cosine does the heavy lifting |
+| **AdamW + `weight_decay=0.01`** | Decoupled Adam + gentle L2 regularization | Neutral on acc, but stops repetitive output | Negligible | 1 | Experiment #9: acts as "grammar regularizer" |
+
+> 💡 **The takeaway:** `torch.compile` + `float16` are the **speed engine** — together they make the 2-minute Colab budget possible. `CosineAnnealingLR` + `weight_decay` are the **quality polish** — they don't raise the accuracy ceiling, but they make training more stable and the output cleaner. All four were inherited from the [MicroGPT](https://github.com/eniompw/MicroGPT) lineage, not discovered through ablation — but every adjacent experiment (bfloat16, warmup, removing weight decay) confirmed these are the right defaults.
+
+---
+
+## �📊 The Leaderboard: Model Comparison
 
 *Best configuration for each architecture we tested.*
 
