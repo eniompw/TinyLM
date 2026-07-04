@@ -69,8 +69,18 @@ transformer = torch.compile(
 ```
 
 - `embed_dim=128`, `n_heads=4`, `ffn_dim=256`, `n_layers=2`
-- `batch_first=True` keeps tensor shape as `(B, T, C)`
-- `dropout=0.` keeps training deterministic and simple
+
+**`batch_first=True`** — `nn.TransformerEncoderLayer` defaults to `batch_first=False`,
+expecting `(seq_len, batch, embed_dim)`. Our embeddings come out as
+`(batch_size, context_size, embed_dim)`, so this flag matches PyTorch's expectations
+to our natural data layout instead of requiring manual transposes. It can't be
+replaced by reordering arguments — it governs how tensor *axes* are interpreted,
+not call syntax. Skipping it wouldn't crash training (since `batch_size=1024` and
+`context_size=8` differ), it would silently scramble batch and sequence dimensions.
+
+**`dropout=0.`** — the layer's real default is `0.1`, not `0`, so this is
+an active override. Omitting it would quietly reintroduce 10% dropout, making runs
+non-deterministic and breaking parity with the dropout-free `TorchMLP.py` baseline.
 
 After the encoder, only the last time step is used for next-token prediction:
 
