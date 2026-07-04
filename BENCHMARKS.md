@@ -23,6 +23,7 @@ Our baseline model is **TinyTransformer.py** (a 2-layer transformer, float16 pre
   - [Phase 4: The Real Intelligence Push (Generalization vs. Memorization)](#phase-4-the-real-intelligence-push-generalization-vs-memorization)
   - [Phase 5: Optimizer Stability (Warmup & Gradient Clipping)](#phase-5-optimizer-stability-warmup--gradient-clipping)
   - [Phase 6: Bigger Batch on Large Dataset (Does batch size help when we're not memorizing?)](#phase-6-bigger-batch-on-large-dataset-does-batch-size-help-when-were-not-memorizing)
+  - [Phase 7: More Attention Heads on Large Dataset (Does more attention capacity help?)](#phase-7-more-attention-heads-on-large-dataset-does-more-attention-capacity-help)
 - [📝 Experiment & Ablation Details](#-experiment--ablation-details)
   - [🏗️ Theme 1: Architecture Choices (Shape, Size, & Encoding)](#%EF%B8%8F-theme-1-architecture-choices-shape-size--encoding)
   - [⚡ Theme 2: Speed, Training, & Optimization Hacks](#-theme-2-speed-training--optimization-hacks)
@@ -130,6 +131,7 @@ Before we dive in, here are two key scientific concepts we use to test AI models
 | **TinyTransformer.py (3L, ctx=32, 5000 stories, 1536 batch)** 👑 | **70.0%** | **1600** | **~3.2×** |
 | TinyTransformer.py (3L, ctx=32, 5000 stories, warmup+clip) | 70.7% | 1600 | ~3.3× |
 | TinyTransformer.py (3L, ctx=32, 5000 stories, 2048 batch) | 70.5% | 1600 | ~4.8× |
+| TinyTransformer.py (3L, ctx=32, 5000 stories, 8 heads) | 70.5% | 1800 | ~4.6× |
 | microgpt_lite.py | 79.4% | 3500 | 10.2× |
 
 > **🚨 The Plot Twist (Read before judging the scores!):**
@@ -151,6 +153,7 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 | **Exp** | **Efficient-Deep** (256d, ffn=512, 4L) | +2.4% | 2.3× slower | ⚠️ Strong mid-training but peaks early. |
 | **Exp** | **Balanced Narrow-Deep** (192d, 4L) | +2.4% | 2.8× slower | ⚠️ Ties Efficient-Deep but takes longer. |
 | **Exp** | **Wider FFN** (3L, ffn=2048) | +3.4% | 3.0× slower | ⚠️ Bigger MLP helps, but not enough to beat standard 3L. |
+| **Exp** | **Heads:** 4 → 8 | +0.5% | ~1.4× slower | ❌ Same ceiling, more overhead. More heads did not unlock new capacity. |
 | **Abl** | **Remove Positional Embeddings** | −7.7% | Negligible | ❌ Without this, the AI reads sentences as "word soup." |
 
 ### ⚡ Training & Speed Hacks
@@ -293,6 +296,28 @@ Here is the quick cheat sheet of what we learned. All tests below are single cha
 
 > 💡 **The Insight — Why batch size stops working:** On 1k stories, a bigger batch helped because it let the model memorize more patterns per step. On 5k stories, the model is genuinely *learning* rather than memorising, so the bottleneck has shifted. More data-per-step doesn't help if the model has already extracted everything it can from its 2.4M parameters. The ceiling is a **capacity ceiling**, not an optimisation ceiling. Breaking it requires more parameters or architectural changes — not a bigger batch.
 
+### Phase 7: More Attention Heads on Large Dataset (Does more attention capacity help?)
+*Goal: Phase 6 showed a bigger batch doesn't break the ~70% ceiling. Does giving the model more attention "perspectives" instead help?*
+
+*Single change from the Phase 4 canonical config:* `n_heads 4 → 8`
+
+| Step | Loss | Acc | Time |
+| ---: | ---: | ---: | ---: |
+| 0 | 4.5728 | 19.2% | 29.1s |
+| 200 | 1.4091 | 57.3% | 45.8s |
+| 400 | 1.2916 | 61.7% | 63.8s |
+| 600 | 1.1752 | 64.8% | 81.4s |
+| 800 | 1.1245 | 65.4% | 98.2s |
+| 1000 | 1.0994 | 65.6% | 114.8s |
+| 1200 | 1.0204 | 67.8% | 131.7s |
+| 1400 | 0.9919 | 68.6% | 148.8s |
+| 1600 | 0.9828 | 70.4% | 165.8s |
+| 1800 | 0.9118 | **70.5%** ⭐ | 182.8s |
+
+> 💡 **Key Result:** 8 attention heads reached **70.5%**, essentially matching the 2048-batch experiment and barely exceeding the simple 4-head baseline, while taking much longer to train.
+
+> 💡 **Insight:** More heads did not break the ~70.5% wall. That strongly suggests the bottleneck is total model capacity and character-level context efficiency, not the number of attention patterns.
+
 ---
 
 ## 📝 Experiment & Ablation Details
@@ -370,6 +395,11 @@ Here, we dive deep into the specific upgrades, setting adjustments, and feature 
 *   **Result:** Peak accuracy **70.5%** at step 1600, training time **191.2s** — compared to 70.0% / 127.7s for the 1536-batch baseline. Same ceiling, 50% more time.
 *   **The Takeaway:** On the 1k-story dataset, bigger batches helped because the model was memorizing — more examples per step = faster memorization. On 5k stories the model is genuinely learning, so optimisation speed is no longer the bottleneck. The ~70% ceiling is a **model capacity** limit. To break it, we need to change the architecture (more parameters, more heads, wider FFN) — not the batch size.
 
+**12. More Attention Heads (4 → 8)**
+*   **The Change:** Increased `n_heads` from 4 to 8 while keeping `embed_dim=256`, `ffn_dim=1024`, `n_layers=3`, `ctx=32`, `batch=1536`, and `num_stories=5000` fixed.
+*   **Result:** Peak accuracy reached **70.5%** at step 1800, but training time rose to **182.8s**.
+*   **The Takeaway:** Doubling the number of heads did not unlock better reasoning or longer-range tracking. It mostly added overhead while landing on the same ceiling as other recent runs. This points to a broader architecture limit rather than an attention-head bottleneck.
+
 ---
 
 ### ✂️ ABLATION: Proving What Matters
@@ -431,6 +461,10 @@ Numbers are great, but what does the AI actually write? Here are samples from ou
 **TinyTransformer.py - 3L, 1536 batch, 5k stories, ctx=32, warmup+clip (70.7% Acc - Stability Variant)**
 > `Once there was a little boy named Tim. Tim was so happy to ho excited to show the water. The bird said, "Thank you sad and wanted to be kind out the little girl became good friends. They liked to play with the park.`
 *(Useful as a teaching experiment: the curve is smoother, but the output quality is not clearly better enough to justify the added code.)*
+
+**TinyTransformer.py - 3L, 1536 batch, 5k stories, ctx=32, 8 heads (70.5% Acc - Head Count Test)**
+> `Once there was a little boy named Tim. He thought about the dog because he was happy. They all lived happily ever after.Once upon a time, there was a little boy named Tim. Tim had a big bug and always be friends and they were so sad`
+*(The first sentence is clean, but the sample quickly loops and repeats story openings. Accuracy stayed near the ceiling, but coherence did not clearly improve.)*
 
 **microgpt_lite.py (79.4% Acc - Nearly perfect TinyStory)**
 > `Once upon a time, there was a little boy named Tim. He loved to measure his favorite toy. One day, he saw a big, deep broken shirt. He thought it would be fun to play with it.`
