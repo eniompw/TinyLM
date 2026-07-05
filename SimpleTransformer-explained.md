@@ -35,7 +35,7 @@ Compared with `TorchMLP.py`, `SimpleTransformer.py` makes these structural chang
 - Increases context window from 4 to 8 (`context_size=8`) so the model can use more recent characters.
 - Replaces the MLP block with a transformer encoder (`2` layers, `4` heads).
 - Adds positional embeddings (`pos_embed`) so token order is represented explicitly.
-- Adds a `# --- Hyperparameters ---` block at the top, matching `TinyTransformer.py` style.
+- Adds a `# --- Hyperparameters ---` block at the top, including `num_stories` and `temp` as named parameters, matching `TinyTransformer.py` style.
 - Keeps all other code — optimizer, eval, generate — as close to `TorchMLP.py` as possible.
 
 ## Model architecture
@@ -135,12 +135,14 @@ Generation logic is the same as `TorchMLP.py` with two differences:
 2. The forward pass uses transformer + positional embeddings instead of MLP + `.view()`.
 
 ```python
-x = tok_embed(torch.tensor([context_ids])) + pos_embed(torch.arange(context_size))
-next_token_probs = torch.softmax(linear(transformer(x)[:, -1, :]) / 0.7, 1)
-next_token = torch.multinomial(next_token_probs, 1).item()
+def generate(num_chars=200, context_ids=list(token_ids[:context_size]), temp=temp):
+    ...
+    x = tok_embed(torch.tensor([context_ids])) + pos_embed(torch.arange(context_size))
+    next_token_probs = torch.softmax(linear(transformer(x)[:, -1, :]) / temp, 1)
+    next_token = torch.multinomial(next_token_probs, 1).item()
 ```
 
-Temperature `0.7` sharpens the output distribution so high-confidence tokens are sampled more often, producing cleaner text without retraining.
+Temperature `temp` (default `0.7`) sharpens the output distribution so high-confidence tokens are sampled more often, producing cleaner text without retraining.
 
 ## How SimpleTransformer differs from TinyTransformer
 
@@ -151,9 +153,10 @@ Temperature `0.7` sharpens the output distribution so high-confidence tokens are
 | Optimizer | AdamW (`betas=(0.9, 0.95)`, fused) | Adam (defaults) |
 | LR scheduler | CosineAnnealingLR | None (fixed `lr=1e-3`) |
 | Mixed precision | `torch.autocast` float16 | None |
+| `num_stories` | 5000 | 200 |
 | `embed_dim` | 256 | 128 |
 | `ffn_dim` | 1024 | 256 |
-| `num_stories` | 1000 | 200 |
+| `temp` | named hyperparameter (0.5) | named hyperparameter (0.7) |
 | Eval strategy | 4096-sample subset | Full dataset |
 | Final accuracy | ~67.7% | ~67.2% |
 | Training time | ~20.5s | ~35.6s |
@@ -169,6 +172,6 @@ The accuracy gap is small (~0.5%). The speed difference comes from full-dataset 
 - same dataset and generation logic
 - new: transformer encoder replaces MLP block
 - new: positional embeddings added alongside token embeddings
-- new: hyperparameters extracted to a named block at the top
+- new: hyperparameters extracted to a named block at the top, including `num_stories` and `temp`
 
 No scheduler, no mixed precision, no advanced optimizer settings — just the transformer itself.
