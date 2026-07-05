@@ -11,7 +11,7 @@ Our baseline model is **TinyTransformer.py** — a 2-layer transformer with floa
 ## 📌 Contents
 
 - [🔬 The Scientific Method: How We Trust Our Data](#-the-scientific-method-how-we-trust-our-data)
-- [🧬 Lineage: From TorchMLP to TinyTransformer](#-lineage-from-torchmlp-to-tinytransformer)
+- [🧬 Lineage: From MLP-Digits to TinyTransformer](#-lineage-from-mlp-digits-to-tinytransformer)
 - [🔧 The Default Stack: SimpleTransformer → TinyTransformer](#-the-default-stack-simpletransformer--tinytransformer)
 - [📊 The Leaderboard: Model Comparison](#-the-leaderboard-model-comparison)
 - [⚠️ The Memorization Trap](#️-the-memorization-trap)
@@ -41,16 +41,16 @@ In AI, it is very easy to fool yourself. Here are the three rules we use to make
 
 ---
 
-## 🧬 Lineage: From TorchMLP to TinyTransformer
+## 🧬 Lineage: From MLP-Digits to TinyTransformer
 
-`TinyTransformer.py` evolved directly from `TorchMLP.py` — it was not built from scratch. Understanding this lineage explains why the baseline hyperparameters look the way they do (see [TinyTransformer-explained.md](TinyTransformer-explained.md) for the full walkthrough).
+`TinyTransformer.py` evolved through three generations — each building directly on the last. The story starts with [MLP-Digits-Classifier](https://github.com/eniompw/MLP-Digits-Classifier), a minimal scikit-learn MLP trained on handwritten digits (MNIST). That project proved the concept of a layered neural network on a toy classification task. `TorchMLP` then reimplemented the same idea in pure PyTorch — adding `nn.Module`, `nn.Embedding`, and a proper training loop. `TinyTransformer` layered attention on top of that PyTorch foundation. Understanding this lineage explains why the baseline hyperparameters look the way they do (see [TinyTransformer-explained.md](TinyTransformer-explained.md) for the full walkthrough).
 
-`TinyTransformer.py` grew in two steps: `TorchMLP` restructured the model into a proper `nn.Module` class, then `TinyTransformer` layered attention on top.
-
-| | `torch_mlp_sequential` | `TorchMLP` | `TinyTransformer` |
+| | `MLP-Digits-Classifier` | `TorchMLP` | `TinyTransformer` |
 | :--- | :--- | :--- | :--- |
-| **Architecture** | 2-layer MLP | 3-layer MLP + embeddings | 2-layer transformer + attention |
-| **Optimizer** | Manual SGD | SGD | AdamW + cosine LR + GradScaler |
+| **Inspiration** | — | ← Inspired by MLP-Digits | ← Built on TorchMLP |
+| **Framework** | scikit-learn | PyTorch | PyTorch |
+| **Architecture** | 2-layer MLP on MNIST digits | 3-layer MLP + embeddings | 2-layer transformer + attention |
+| **Optimizer** | LBFGS (sklearn default) | SGD | AdamW + cosine LR + GradScaler |
 | **Custom forward** | No | Yes (embed + flatten) | Yes (full transformer loop) |
 | **`torch.compile`** | No | No | Yes |
 
@@ -65,7 +65,7 @@ In AI, it is very easy to fool yourself. Here are the three rules we use to make
 
 ### What Actually Changed
 
-Only two hyperparameters were adjusted in the transition:
+Only two hyperparameters were adjusted in the transition from TorchMLP to TinyTransformer:
 
 | Setting | TorchMLP | TinyTransformer |
 | :--- | :--- | :--- |
