@@ -64,46 +64,51 @@ In AI, it is very easy to fool yourself. Here are the three rules we use to make
 
 ## 🧬 Lineage: From TorchMLP to TinyTransformer
 
-`TinyTransformer.py` wasn't built from scratch — it evolved directly from `TorchMLP.py`
-(see `TinyTransformer-explained.md`). Understanding this lineage explains *why* the baseline
-hyperparameters look the way they do.
+`TinyTransformer.py` evolved directly from `TorchMLP.py` — it was not built from scratch. Understanding this lineage explains why the baseline hyperparameters look the way they do (see `TinyTransformer-explained.md` for the full walkthrough).
 
-### Inherited from TorchMLP (unchanged)
+### The MLP Root: TorchLinear → TorchMLP
 
-These settings were carried over without modification:
+`TorchMLP.py` itself originated as a rename and refactor of `TorchLinear.py` (commit `84b89b7f`, May 31 2026). `TorchLinear.py` was already a character-level language model with an MLP + embedding pipeline, but it defined the model as a flat `nn.Sequential` block — the same style as `torch_mlp_sequential.py` from the [MLP-Digits-Classifier](https://github.com/eniompw/MLP-Digits-Classifier) repo. The refactor introduced two structural improvements:
+
+- **`nn.Sequential` → `nn.Module`:** Moved into a proper class, making the architecture extensible toward transformers.
+- **Explicit `nn.Embedding` + MLP:** Made the embed → flatten → predict pipeline explicit and readable.
+
+The full three-generation lineage looks like this:
+
+| | `torch_mlp_sequential` | `TorchMLP` | `TinyTransformer` |
+| :--- | :--- | :--- | :--- |
+| **Architecture** | 2-layer MLP | 3-layer MLP + embeddings | 2-layer transformer + attention |
+| **Optimizer** | Manual SGD | SGD | AdamW + cosine LR + GradScaler |
+| **Custom forward** | No | Yes (embed + flatten) | Yes (full transformer loop) |
+| **`torch.compile`** | No | No | Yes |
+
+### What TinyTransformer Inherited (Unchanged)
+
+When moving from `TorchMLP` to `TinyTransformer`, these settings were carried over without modification:
 
 - `embed_dim = 256`
 - `torch.manual_seed(42)`
 - `batch_size = 1024`
-- `2001` training epochs, evaluated every `200` steps
+- 2001 training steps, evaluated every 200 steps
 - Automatic device selection via `torch.set_default_device(...)`
 - The same `load_tinystories(...)` data pipeline and sliding-window generation loop
 
-### What actually changed
+### What Actually Changed
 
-Only two hyperparameters were adjusted when moving from MLP to Transformer:
+Only two hyperparameters were adjusted in the transition:
 
 | Setting | TorchMLP | TinyTransformer |
 | :--- | :--- | :--- |
 | `context_size` | 4 | 8 |
 | `num_stories` | 200 | 1000 |
 
-Everything else that's new in the first Transformer version — the 2-layer encoder (4 heads,
-`ffn_dim=1024`), `torch.compile`, float16 autocast + `GradScaler`, fused AdamW,
-`zero_grad(set_to_none=True)`, cosine LR schedule (`eta_min=1e-4`), gradient clipping (`1.0`),
-and inference temperature (`0.7`) — was **not** discovered through ablations here. These features
-were adopted directly from [Keller Jordan's modded-nanogpt speedrun](https://github.com/KellerJordan/modded-nanogpt),
-a record-breaking GPT-2 training optimization repo that served as the direct inspiration for
-`TinyTransformer.py`. One idea from that speedrun, AdamW `betas=(0.9, 0.95)`, was documented but
-deliberately left at PyTorch defaults in the initial version.
+Everything else that's new — the 2-layer encoder (4 heads, `ffn_dim=1024`), `torch.compile`, float16 autocast + `GradScaler`, fused AdamW, `zero_grad(set_to_none=True)`, cosine LR schedule (`eta_min=1e-4`), gradient clipping (`1.0`), and inference temperature (`0.7`) — was **not** discovered through ablations. These were adopted directly from [Keller Jordan's modded-nanogpt speedrun](https://github.com/KellerJordan/modded-nanogpt), a record-breaking GPT-2 training optimization repo and the direct inspiration for `TinyTransformer.py`.
 
-This is why Phase 1 treats `TinyMLP.py` / `TorchMLP.py` as prior-generation reference points
-rather than unrelated models: `TinyTransformer.py` is a direct descendant of the MLP baseline
-with attention layered on top.
+One idea from that speedrun — `AdamW betas=(0.9, 0.95)` — was noted but deliberately left at PyTorch defaults in the initial version.
 
 ### 🔗 The Keller Jordan Influence
 
-The following features in `TinyTransformer.py` are Keller-lineage ideas:
+The table below maps each Keller-lineage feature to its adoption status in `TinyTransformer.py`:
 
 | Feature | In TinyTransformer? | Origin |
 | :--- | :--- | :--- |
@@ -111,62 +116,33 @@ The following features in `TinyTransformer.py` are Keller-lineage ideas:
 | `AdamW betas=(0.9, 0.95)` | ✅ Yes | llm.c baseline, refined by Keller |
 | `fused=True` optimizer | ✅ Yes | Keller training loop |
 | `float16` mixed precision | ✅ Yes | Keller record #10 |
-| `CosineAnnealingLR` + `eta_min=1e-4` | ✅ Yes | Keller record #19 (decay to 0.1×, not 0) |
+| `CosineAnnealingLR` + `eta_min=1e-4` | ✅ Yes | Keller record #19 (decays to 0.1×, not 0) |
 | Pre-LN (`norm_first=True`) | ✅ Yes | Keller modernized architecture |
 | `bfloat16` | ❌ Tried, failed | T4 has no native bfloat16 hardware |
 | Flash Attention | ❌ Tried, marginal | Model too small to benefit |
 | Muon optimizer | ❌ Not tried | Too complex for educational scope |
-| RoPE embeddings | ❌ Not tried | Learned pos. embeddings kept for clarity |
+| RoPE embeddings | ❌ Not tried | Learned positional embeddings kept for clarity |
 
-This lineage matters because it explains *why* the defaults work so well out of the box —
-they were battle-tested at GPT-2 scale before being ported down to this tiny model.
-It also explains why some "failed" experiments in this notebook (bfloat16, Flash Attention)
-are legitimate wins at larger scale: the technique is sound, but the hardware or model
-size isn't the right fit here.
+This lineage explains two things at once: why the defaults work so well out of the box (they were battle-tested at GPT-2 scale before being ported down), and why some "failed" experiments here — bfloat16, Flash Attention — are legitimate wins at larger scale. The technique is sound; the hardware or model size just isn't the right fit.
+
+This is also why Phase 1 treats `TinyMLP.py` / `TorchMLP.py` as prior-generation reference points rather than unrelated models: `TinyTransformer.py` is a direct descendant with attention layered on top.
 
 ---
 
-### 🌱 How TorchMLP itself was created
+## 🔧 The Default Stack: SimpleTransformer → TinyTransformer
 
-`TorchMLP.py` was born from a rename and refactor of `TorchLinear.py`
-(commit `84b89b7f`, May 31 2026). `TorchLinear.py` was already a character-level language model
-with a core MLP + embedding pipeline, but it defined the model as a flat `nn.Sequential` block —
-the same style used in `torch_mlp_sequential.py` from the
-[MLP-Digits-Classifier](https://github.com/eniompw/MLP-Digits-Classifier) repo.
+`TinyTransformer.py`'s canonical config isn't just bigger hyperparameters — it adds five code-level optimizations absent from `SimpleTransformer.py`. Each costs 1–2 lines. The table below shows what each does and where it's been proven:
 
-The rename introduced two structural improvements:
-
-- **`nn.Sequential` → `nn.Module`:** Refactored into a proper class, making the architecture
-  easier to extend toward transformers.
-- **Separate `nn.Embedding` + MLP:** Made the embed → flatten → predict pipeline explicit and
-  readable.
-
-The full three-file lineage looks like this:
-
-| | `torch_mlp_sequential` | `TorchMLP` | `TinyTransformer` |
-| :--- | :--- | :--- | :--- |
-| **Weight management** | `nn.Linear` | `nn.Linear` | `nn.Linear` |
-| **Optimizer** | Manual SGD | SGD | AdamW + cosine LR + GradScaler |
-| **Architecture** | 2-layer MLP | 3-layer MLP + embeddings | 2-layer transformer + attention |
-| **Custom forward** | No | Yes (embed + flatten) | Yes (full transformer loop) |
-| **`torch.compile`** | No | No | Yes |
-
----
-
-## 🔧 The Default Stack: What Changed from SimpleTransformer
-
-The canonical TinyTransformer config isn't just bigger hyperparameters — it also adds five code-level optimizations that `SimpleTransformer.py` doesn't have. Each costs 1-2 lines. Here's what each does, proven by the experiments in this notebook:
-
-| Component | `SimpleTransformer.py` | `TinyTransformer.py` (canonical) | Accuracy Impact | Speed Impact | Proven By |
+| Component | `SimpleTransformer.py` | `TinyTransformer.py` | Accuracy Impact | Speed Impact | Proven By |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`torch.compile`** | ✅ Already present | ✅ Same | Neutral | **~1.2× faster** (after a ~32s one-time compile tax) | Phase 8: Direct ablation (Cold vs Warm) |
-| **float16 autocast** | ❌ float32 only | ✅ `torch.autocast` on forward + eval | Neutral | Major — halves memory bandwidth, enables batch=1536 + ctx=32 in <2min | bfloat16 ablation: 4.2× slower for +0.2% |
-| **`CosineAnnealingLR`** | ❌ Flat LR | ✅ `CosineAnnealingLR(T_max=n_steps, eta_min=1e-4)` | Smooths final convergence | ~0 | Phase 5: adding warmup on top only gained +0.6%, meaning cosine does the heavy lifting |
-| **AdamW** | ❌ `Adam(params, lr)` | ✅ `AdamW(params, lr, betas=(0.9, 0.95), weight_decay=0.01, fused=True)` | Neutral on acc; `weight_decay` stops repetitive output | `fused=True` speeds up GPU optimizer kernel | Experiment #9: `weight_decay` acts as "grammar regularizer" |
-| **Fixed `eval_rng`** | ❌ Full dataset eval every 200 steps | ✅ Dedicated `eval_rng` generator, 4096-sample subset | Eliminates accuracy wobble | Faster per-eval (4096 vs full dataset) | Scientific Method section: "stops accuracy wobble" |
-| **Inference temp** | 0.7 (hardcoded) | 0.5 (parameterized) | N/A (inference only) | N/A | Experiment: eliminates fake words ("throbe" → "robe") |
+| **`torch.compile`** | ✅ Present | ✅ Same | Neutral | ~1.2× faster (after ~32s one-time compile tax) | Phase 8: Cold vs Warm ablation |
+| **float16 autocast** | ❌ float32 | ✅ `torch.autocast` on forward + eval | Neutral | Major — halves memory bandwidth; enables batch=1536 + ctx=32 in <2 min | bfloat16 ablation: 4.2× slower for +0.2% |
+| **`CosineAnnealingLR`** | ❌ Flat LR | ✅ `CosineAnnealingLR(T_max=n_steps, eta_min=1e-4)` | Smooths final convergence | Negligible | Phase 5: warmup on top gained only +0.6%, so cosine does the heavy lifting |
+| **AdamW** | ❌ `Adam(params, lr)` | ✅ `AdamW(..., betas=(0.9, 0.95), weight_decay=0.01, fused=True)` | Neutral on accuracy; `weight_decay` stops repetitive output | `fused=True` speeds up GPU optimizer kernel | Experiment #9: `weight_decay` acts as grammar regularizer |
+| **Fixed `eval_rng`** | ❌ Full dataset eval every 200 steps | ✅ Dedicated `eval_rng` generator, 4096-sample subset | Eliminates accuracy wobble | Faster per-eval (4096 vs full dataset) | Scientific Method section |
+| **Inference temperature** | 0.7 (hardcoded) | 0.5 (parameterized) | N/A | N/A | Eliminates invented words ("throbe" → "robe") |
 
-> 💡 **The takeaway:** `torch.compile` + `float16` are the **speed engine** — together they make the 2-minute Colab budget possible. `CosineAnnealingLR` + `AdamW`/`weight_decay` are the **quality polish** — they don't raise the accuracy ceiling but make training more stable and output cleaner. `eval_rng` is the **scientific control** — it makes the numbers trustworthy. All five trace back to [Keller Jordan's modded-nanogpt](https://github.com/KellerJordan/modded-nanogpt), not discovered through ablation — but every adjacent experiment confirmed these are the right defaults.
+> 💡 **The takeaway:** `torch.compile` + `float16` are the **speed engine** — together they make the 2-minute Colab budget possible. `CosineAnnealingLR` + `AdamW` / `weight_decay` are the **quality polish** — they don't raise the accuracy ceiling but stabilize training and clean up output. `eval_rng` is the **scientific control** — it makes the numbers trustworthy. All five trace back to [Keller Jordan's modded-nanogpt](https://github.com/KellerJordan/modded-nanogpt) rather than being discovered through ablation here — but every adjacent experiment confirmed these are the right defaults.
 
 ---
 
