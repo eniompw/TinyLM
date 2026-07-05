@@ -44,6 +44,7 @@ We didn't start with a complex AI — we built up to it, upgrading one thing at 
 | [tinystories_dataset.py](tinystories_dataset.py) | Streams the TinyStories dataset for all other models. |
 | **Explained Guides** | |
 | [TinyMLP-explained.md](TinyMLP-explained.md) | Walkthrough of `TinyMLP.py`: data flow, tensor shapes, and gradients. |
+| [TorchMLP-Explained.md](TorchMLP-Explained.md) | Walkthrough of `TorchMLP.py`: the PyTorch rewrite and autograd. |
 | [SimpleTransformer-explained.md](SimpleTransformer-explained.md) | Walkthrough of the MLP → Transformer transition. |
 | [TinyTransformer-explained.md](TinyTransformer-explained.md) | Walkthrough of architecture choices and speed/quality optimizations. |
 
