@@ -6,18 +6,20 @@ from tinystories_dataset import load_tinystories
 torch.set_default_device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # --- Hyperparameters ---
+num_stories  = 200                                                                                # number of stories loaded from TinyStories dataset
 context_size = 8                                                                                  # number of previous tokens used to predict next
-embed_dim    = 128                                                                                # token/positional embedding dimension
+embed_dim    = 128                                                                                # token/positional embedding dimension (d_model)
 n_heads      = 4                                                                                  # number of attention heads in each transformer layer
 ffn_dim      = 256                                                                                # feed-forward network hidden dimension
 n_layers     = 2                                                                                  # number of transformer encoder layers
 batch_size   = 1024                                                                               # number of samples per training step
 lr           = 1e-3                                                                               # learning rate
 n_steps      = 2001                                                                               # total training steps
+temp         = 0.7                                                                                # temperature for sampling during generation
 
 # --- Data & Tokenization ---
-input_ids, target_ids, idx_to_char, token_ids = load_tinystories(num_stories=200, context_size=context_size)
-input_ids, target_ids = torch.tensor(input_ids), torch.tensor(target_ids)                         # convert to tensors
+input_ids, target_ids, idx_to_char, token_ids = load_tinystories(num_stories=num_stories, context_size=context_size) # previous chars to predict next
+input_ids, target_ids = torch.tensor(input_ids), torch.tensor(target_ids)                          # convert to tensors
 
 # --- Model ---
 torch.manual_seed(42)                                                                             # seed helper for reproducibility
@@ -47,13 +49,14 @@ print(f"Training time: {time.time() - start:.1f}s")
 
 # --- Generate ---
 @torch.no_grad()                                                                                  # disable autograd tracking during inference
-def generate(num_chars=200, context_ids=list(token_ids[:context_size])):                          # start with true initial context
+def generate(num_chars=200, context_ids=list(token_ids[:context_size]), temp=temp):               # start with true initial context
     output_chars = [idx_to_char[i] for i in context_ids]                                          # decode initial context to string
     for _ in range(num_chars):
         x = tok_embed(torch.tensor([context_ids])) + pos_embed(torch.arange(context_size))        # embed current window
-        next_token_probs = torch.softmax(linear(transformer(x)[:, -1, :]) / 0.7, 1)               # apply temp 0.7 to pick higher-confidence tokens
+        next_token_probs = torch.softmax(linear(transformer(x)[:, -1, :]) / temp, 1)              # apply temp parameter to pick higher-confidence tokens
         next_token = torch.multinomial(next_token_probs, 1).item()                                # randomly sample from predicted distribution
-        context_ids, output_chars = context_ids[1:] + [next_token], output_chars + [idx_to_char[next_token]]  # slide window and append
+        context_ids, output_chars = context_ids[1:] + [next_token], output_chars + [idx_to_char[next_token]] # slide window forward and append string
     return ''.join(output_chars)
 
+print("\n--- Generated Story ---")
 print(generate())
