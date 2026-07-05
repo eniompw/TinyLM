@@ -4,7 +4,7 @@ Think of `TinyTransformer.py` as `TorchMLP.py` with its tunnel vision fixed — 
 
 This walkthrough covers what changed, why it was changed, and what each optimization actually does.
 
-> **Research source for optimization ideas:** [MicroGPT](https://github.com/eniompw/MicroGPT)
+> **Lineage:** `TorchMLP.py` was itself inspired by [MLP-Digits-Classifier](https://github.com/eniompw/MLP-Digits-Classifier) — a minimal MLP trained on handwritten digits — adapted here for character-level language modeling. The optimization techniques in `TinyTransformer.py` were sourced from [MicroGPT](https://github.com/eniompw/MicroGPT), which in turn drew from [Keller Jordan's modded-nanogpt speedrun](https://github.com/KellerJordan/modded-nanogpt). See [BENCHMARKS.md](BENCHMARKS.md) for the full lineage and ablation evidence.
 
 ---
 
