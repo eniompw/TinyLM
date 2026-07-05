@@ -127,6 +127,8 @@ This lineage explains two things at once: why the defaults work so well out of t
 
 This is also why Phase 1 treats `TinyMLP.py` / `TorchMLP.py` as prior-generation reference points rather than unrelated models: `TinyTransformer.py` is a direct descendant with attention layered on top.
 
+> 🔬 **Inspired ≠ Assumed:** A technique that wins at GPT-2 scale isn't guaranteed to help a 2M-parameter model trained in two minutes on a T4. Every Keller-lineage feature above was re-tested here — via a dedicated ablation (bfloat16, Flash Attention, weight tying, GELU) or by holding up across later experiments. That local testing, more than the borrowing itself, is what most of this document is about.
+
 ---
 
 ## 🔧 The Default Stack: SimpleTransformer → TinyTransformer
@@ -142,7 +144,7 @@ This is also why Phase 1 treats `TinyMLP.py` / `TorchMLP.py` as prior-generation
 | **Fixed `eval_rng`** | ❌ Full dataset eval every 200 steps | ✅ Dedicated `eval_rng` generator, 4096-sample subset | Eliminates accuracy wobble | Faster per-eval (4096 vs full dataset) | Scientific Method section |
 | **Inference temperature** | 0.7 (hardcoded) | 0.5 (parameterized) | N/A | N/A | Eliminates invented words ("throbe" → "robe") |
 
-> 💡 **The takeaway:** `torch.compile` + `float16` are the **speed engine** — together they make the 2-minute Colab budget possible. `CosineAnnealingLR` + `AdamW` / `weight_decay` are the **quality polish** — they don't raise the accuracy ceiling but stabilize training and clean up output. `eval_rng` is the **scientific control** — it makes the numbers trustworthy. All five trace back to [Keller Jordan's modded-nanogpt](https://github.com/KellerJordan/modded-nanogpt) rather than being discovered through ablation here — but every adjacent experiment confirmed these are the right defaults.
+> 💡 **The takeaway:** `torch.compile` + `float16` are the **speed engine** — together they make the 2-minute Colab budget possible. `CosineAnnealingLR` + `AdamW` / `weight_decay` are the **quality polish** — they don't raise the accuracy ceiling but stabilize training and clean up output. `eval_rng` is the **scientific control** — it makes the numbers trustworthy. All five originate from [Keller Jordan's modded-nanogpt](https://github.com/KellerJordan/modded-nanogpt), but each earned its spot only after local ablations (bfloat16, GELU, weight tying, warmup/clipping, and more) confirmed it at this tiny scale — that confirmation work is the real subject of everything below.
 
 ---
 
