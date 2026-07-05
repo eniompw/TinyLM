@@ -1,148 +1,159 @@
 # TinyTransformer Explained
 
-This file walks through `TinyTransformer.py` and explains how it builds on `TorchMLP.py`.
+Think of `TinyTransformer.py` as `TorchMLP.py` with its tunnel vision fixed — instead of squinting at 4 characters, it reads a 32-character window and uses attention to weigh which parts matter most.
 
-`TorchMLP.py` is the baseline: a character-level MLP that predicts the next character from a fixed context window.
-`TinyTransformer.py` keeps the same core training goal, dataset pipeline style, and autoregressive generation loop, then adds transformer attention plus a set of speed and quality optimizations.
+This walkthrough covers what changed, why it was changed, and what each optimization actually does.
 
-Research source for optimization ideas: https://github.com/eniompw/MicroGPT
+> **Research source for optimization ideas:** [MicroGPT](https://github.com/eniompw/MicroGPT)
+
+---
 
 ## Contents
 
-1. [What stays the same from TorchMLP](#what-stays-the-same-from-torchmlp)
-2. [What changes in TinyTransformer](#what-changes-in-tinytransformer)
-3. [Model architecture](#model-architecture)
-4. [Training loop and optimization stack](#training-loop-and-optimization-stack)
-5. [Speed optimizations](#speed-optimizations)
-6. [Accuracy, quality, and scientific controls](#accuracy-quality-and-scientific-controls)
-7. [Generation behavior](#generation-behavior)
-8. [Practical scaling notes](#practical-scaling-notes)
-9. [Why this version is stronger than TorchMLP](#why-this-version-is-stronger-than-torchmlp)
-10. [Short summary](#short-summary)
+1. [What changed from TorchMLP](#1-what-changed-from-torchmlp)
+2. [Model architecture](#2-model-architecture)
+3. [Training loop and optimization stack](#3-training-loop-and-optimization-stack)
+4. [Speed optimizations](#4-speed-optimizations)
+5. [Accuracy, quality, and scientific controls](#5-accuracy-quality-and-scientific-controls)
+6. [Generation behavior](#6-generation-behavior)
+7. [Practical scaling notes](#7-practical-scaling-notes)
+8. [Summary: What TinyTransformer adds over TorchMLP](#8-summary-what-tinytransformer-adds-over-torchmlp)
 
-## What stays the same from TorchMLP
+---
 
-Both scripts share the same high-level workflow:
+## 1. What Changed from TorchMLP
 
-1. Load TinyStories using `load_tinystories(...)` from `tinystories_dataset.py`.
-2. Convert text into character IDs and context windows.
-3. Train a next-character predictor using cross-entropy.
-4. Generate text autoregressively by repeatedly predicting one token at a time.
+The core task is identical: load TinyStories, convert text to character IDs, train a next-character predictor with cross-entropy, and generate text autoregressively. Everything below is what changed on top of that shared foundation.
 
-So this is not a new task. It is the same task with a stronger architecture and faster training stack.
+| Setting / Component | `TorchMLP.py` | `TinyTransformer.py` | Why it changed |
+| :--- | :--- | :--- | :--- |
+| `context_size` | 4 | 32 | More context = fewer pronoun swaps, better sentence coherence |
+| `num_stories` | 200 | 5000 | Larger dataset prevents memorization, forces grammar learning |
+| Model block | 3-layer MLP | 3-layer Transformer Encoder (4 heads) | Attention lets the model relate any two positions in the window |
+| Positional encoding | None | Learned `pos_embed` | Transformers are order-blind without it (−7.7% accuracy if removed) |
+| Optimizer | SGD | AdamW `betas=(0.9, 0.95)`, `weight_decay=0.01`, `fused=True` | Faster convergence, gradient stability, grammar regularization |
+| LR schedule | Flat | `CosineAnnealingLR(T_max=n_steps, eta_min=1e-4)` | Smooth late-stage convergence without a hard stop |
+| Precision | float32 | float16 autocast | Halves memory bandwidth; enables batch=1536 + ctx=32 in <2 min |
+| Graph compilation | None | `torch.compile(...)` | Fuses ops into optimized CUDA kernels (~1.2× faster after warmup) |
+| Device setup | Manual `.to(device)` | `torch.set_default_device(device)` | Removes boilerplate and prevents hardware mismatch errors |
+| Eval method | Full dataset every 200 steps | Fixed `eval_rng`, 4096-sample subset | Eliminates accuracy wobble from random subset variation |
+| Inference temperature | — | `0.5` | Sharpens output distribution, eliminates invented words |
 
-## What changes in TinyTransformer
+---
 
-Compared with `TorchMLP.py`, `TinyTransformer.py` makes these structural changes:
+## 2. Model Architecture
 
-- Increases context window from 4 to 32 (`context_size=32`) so the model can use more recent characters.
-- Increases dataset slice from 200 stories to 5000 stories for a richer training signal.
-- Replaces the MLP block with a transformer encoder (`3` layers, `4` heads). *Note: 3 layers was found to be the perfect "sweet spot" between depth and speed!*
-- Adds positional embeddings (`pos_embed`) so token order is represented explicitly.
-- Uses modern PyTorch optimization features for GPU throughput and stability.
-- Automatically sets the default device to GPU (`torch.set_default_device(device)`) to remove manual `.to(device)` boilerplate.
-
-## Model architecture
-
-### Token + position embeddings
+### Token + Position Embeddings
 
 ```python
-tok_embed = nn.Embedding(len(idx_to_char), embed_dim)
-pos_embed = nn.Embedding(context_size, embed_dim)
-```
+tok_embed = nn.Embedding(len(idx_to_char), embed_dim)  # shape: (vocab_size, 256)
+pos_embed = nn.Embedding(context_size, embed_dim)       # shape: (32, 256)
 
-- `tok_embed` maps each character ID to a 256-dim vector.
-- `pos_embed` gives each position in the 32-token window its own learned vector.
-- The input to the transformer is their sum:
-
-```python
+# Inside forward:
 x = tok_embed(batch_x) + pos_embed(torch.arange(context_size))
+# x shape: (B, 32, 256)  — batch × sequence × embedding
 ```
 
-This lets the model know both what token it sees and where it appears in the context. Without this, the AI sees sentences as a jumbled "bag of letters" (our benchmarks show that removing positional embeddings drops accuracy by ~7.7%).
+`tok_embed` maps each character ID to a 256-dim vector (what the token *is*). `pos_embed` gives each position its own learned 256-dim vector (where the token *sits*). Their sum is the input to the transformer — the model now knows both identity and position simultaneously.
 
-### Transformer encoder
+Without `pos_embed`, the transformer sees all characters as an unordered bag of letters. Our benchmarks show removing it drops accuracy by **−7.7%**.
+
+### Transformer Encoder
 
 ```python
 transformer = torch.compile(
     nn.TransformerEncoder(
         nn.TransformerEncoderLayer(
-            embed_dim, n_heads, ffn_dim,
-            batch_first=True,
-            dropout=0.,
-            norm_first=True
+            d_model=embed_dim,   # 256 — width of each token's representation
+            nhead=n_heads,       # 4 — parallel attention patterns
+            dim_feedforward=ffn_dim,  # 1024 — inner width of the FFN sublayer
+            batch_first=True,    # tensor shape is (B, T, C), not (T, B, C)
+            dropout=0.,          # no dropout — model is already small
+            norm_first=True      # Pre-LN: normalize before attention, more stable
         ),
-        n_layers
+        num_layers=n_layers      # 3 — sweet spot between depth and speed
     )
 )
 ```
 
-- `d_model=256`
-- `nhead=4`
-- feed-forward width `1024`
-- `3` stacked encoder layers (best speed/accuracy tradeoff)
-- `batch_first=True` keeps tensor shape as `(B, T, C)`
-- `norm_first=True` is often more stable for transformer training
+`batch_first=True` keeps tensor shapes as `(B, T, C)` throughout — batch size, sequence length, channel width. `norm_first=True` (Pre-LN) applies layer normalization *before* the attention and FFN sublayers, which tends to be more numerically stable during training.
 
-After the encoder, only the last time step is used for next-token prediction:
+After the encoder, only the final time step is used for prediction:
 
 ```python
 logits = linear(transformer(x)[:, -1, :])
+# transformer(x) shape: (B, 32, 256)
+# [:, -1, :]     shape: (B, 256)      — take the last position only
+# logits         shape: (B, vocab_size)
 ```
 
-This mirrors the autoregressive setup: use the whole context, predict the next character.
+This mirrors the autoregressive setup: read the full 32-character context, predict only the next character.
 
-## Training loop and optimization stack
+---
 
-The training loop is still simple and compact:
+## 3. Training Loop and Optimization Stack
 
-1. Sample random mini-batch indices.
-2. Run forward pass with mixed precision autocast.
-3. Compute cross-entropy loss.
-4. Backprop, optimizer step, scheduler step.
-5. Print periodic evaluation accuracy using a fixed random seed.
+The training loop is still compact and readable:
 
-The key difference vs `TorchMLP.py` is that many performance and stability techniques are combined in one loop.
+1. Sample random mini-batch indices
+2. Run forward pass under mixed-precision autocast
+3. Compute cross-entropy loss
+4. Backprop → optimizer step → scheduler step
+5. Every 200 steps: evaluate accuracy on a fixed 4096-sample subset
 
-## Speed optimizations
+The key difference from `TorchMLP.py` is that speed and stability techniques are layered together in one loop rather than being added one at a time.
 
-The speed-oriented changes in this section are adapted from experiments and notes in the MicroGPT repository:
-https://github.com/eniompw/MicroGPT
+---
 
-### 1) Global Device Default
+## 4. Speed Optimizations
+
+### Global Device Default
 
 ```python
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 torch.set_default_device(device)
 ```
-Instead of manually moving every tensor to the GPU (`.to('cuda')`), we tell PyTorch to put everything on the GPU by default. This keeps the code clean and prevents hardware mismatch errors.
 
-### 2) `torch.compile`
+Instead of manually calling `.to('cuda')` on every tensor and module, we tell PyTorch to place everything on the GPU by default. Keeps the code clean and eliminates a common source of device-mismatch errors.
 
-`torch.compile(...)` traces and fuses model operations into optimized kernels.
-This reduces Python overhead and kernel launch fragmentation, often giving large speedups on GPU-heavy code. (Just remember to "warm up" the model by running it once before timing it!)
+### `torch.compile`
 
-### 3) `float16` autocast
+```python
+transformer = torch.compile(nn.TransformerEncoder(...))
+```
+
+Traces the model graph and fuses operations into optimized CUDA kernels, reducing Python overhead and kernel launch fragmentation. Gives roughly **1.2× faster** throughput after an initial ~32-second one-time compilation tax on the first forward call.
+
+> ⚠️ Always run a warmup pass before timing. Benchmarking a cold-start `torch.compile` model makes it look far slower than it actually is (32.5s step 0 vs 0.2s after warmup).
+
+### `float16` Autocast
 
 ```python
 with torch.autocast('cuda', dtype=torch.float16):
-    ...
+    logits = linear(transformer(x)[:, -1, :])
+    loss = F.cross_entropy(logits, batch_y)
 ```
 
-`float16` reduces memory traffic and accelerates matrix math on modern GPUs.
+Runs the forward pass and loss in 16-bit floats, halving memory bandwidth and accelerating matrix math on the T4. This is what makes `batch=1536, ctx=32` fit inside a 2-minute Colab run.
 
-### 4) Fused AdamW
+### Fused AdamW
 
 ```python
-optimizer = torch.optim.AdamW(params, lr=lr, betas=(0.9, 0.95), weight_decay=0.01, fused=True)
+optimizer = torch.optim.AdamW(
+    params, lr=lr,
+    betas=(0.9, 0.95),
+    weight_decay=0.01,
+    fused=True           # groups parameter updates into a single CUDA kernel
+)
 ```
 
-With `fused=True`, parameter updates are grouped into optimized CUDA kernels instead of many small launches.
-This reduces update overhead, especially when many tensors are involved.
+`fused=True` combines all parameter update operations into one optimized kernel launch instead of many small ones. The lower second beta `(0.95 vs default 0.999)` makes the optimizer react faster to recent gradient patterns — important for transformer workloads.
 
-## Accuracy, quality, and scientific controls
+---
 
-### 1) Cosine LR schedule with floor
+## 5. Accuracy, Quality, and Scientific Controls
+
+### Cosine LR Schedule with Floor
 
 ```python
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
@@ -150,92 +161,74 @@ scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
 )
 ```
 
-- Starts with larger steps to move quickly early in training.
-- Gradually decays learning rate to `1e-4` for finer late-stage convergence.
+Starts with large learning rate steps for fast early progress, then smoothly decays to `1e-4` — a floor that prevents the optimizer from grinding to a complete halt late in training. Adding a warmup on top (Phase 5 experiment) only improved peak accuracy by +0.7%, so cosine alone does most of the work.
 
-### 2) AdamW momentum tuning (`betas=(0.9, 0.95)`)
-
-Lower second beta than the PyTorch default (`0.999`) makes the optimizer react faster to recent gradient patterns in transformer workloads.
-
-### 3) Large Batch + High LR (`batch=1536`, `lr=2e-3`)
-
-Instead of making the model bigger, we feed it more data per step (`batch_size=1536`) and set a high learning rate (`2e-3`) to match. While a batch size of 1536 is a slight decrease from the peak offline-memorization baseline (2048), it serves as a balance to offset the mathematical overhead of a larger `context_size=32` while keeping the run under our budget, and still processing far more parallel tokens per step than earlier setups.
-
-### 4) Scientific Controls: Fixed Eval Seed
+### Fixed Eval Seed
 
 ```python
 eval_rng = torch.Generator(device=device).manual_seed(0)
-# ... inside the loop:
+
+# Inside the eval loop:
 eval_idx = torch.randint(0, len(input_ids), (4096,), generator=eval_rng)
 ```
 
-When we test the model every 200 steps, we don't test it on the whole dataset. We grab a random subset. But if the subset changes every time, our accuracy will "wobble" up and down based on luck! We fixed this by creating a dedicated `eval_rng`. Now, the model is always tested on the exact same 4,096 stories, completely eliminating accuracy noise.
+Every 200 steps the model is evaluated on the same 4,096 stories — not a new random sample each time. Without this, the accuracy curve wobbles up and down based on which stories happened to be sampled, making it impossible to trust small differences between runs.
 
-### 5) Inference temperature (`0.5`)
+### `weight_decay=0.01`
+
+Adds a small regularization penalty that discourages any single weight from growing too large. In practice this acts as a **grammar regularizer** — it stops the model from lazily repeating the same phrase over and over in generated text.
+
+### Inference Temperature
 
 ```python
-next_token_probs = torch.softmax(linear(transformer(x)[:, -1, :]) / temp, 1)
+next_token_probs = torch.softmax(logits / temp, dim=1)  # temp = 0.5
 ```
 
-Dividing logits by `temp` (`0.5` by default) sharpens the output distribution:
+Dividing logits by `0.5` before softmax sharpens the probability distribution: confident predictions become more likely, low-confidence guesses are suppressed. This eliminates invented words like "throbe" (→ "robe") without any retraining.
 
-- high-confidence tokens become more likely
-- low-confidence tokens become less likely
+---
 
-This makes the model more confident, producing cleaner text and eliminating weird/fake words (like "throbe" -> "robe"), without retraining.
+## 6. Generation Behavior
 
-## Generation behavior
+Generation follows the same sliding-window loop as `TorchMLP.py`:
 
-Generation logic is still close to `TorchMLP.py`:
+1. Start from the first real context window in the dataset
+2. Run forward pass → get next-token probabilities
+3. Sample one token using temperature-scaled softmax
+4. Append token, drop the oldest, repeat
 
-1. Start from the first real context window from the dataset.
-2. Predict next-token distribution.
-3. Sample one token.
-4. Slide context by one and repeat.
+The differences from `TorchMLP.py`:
 
-Main differences are:
+| | `TorchMLP.py` | `TinyTransformer.py` |
+| :--- | :--- | :--- |
+| Context length | 4 chars | 32 chars |
+| Model forward | MLP | Transformer encoder |
+| Temperature | None | 0.5 (sharpens output) |
 
-- context length is 32 instead of 4
-- transformer encoder replaces MLP forward pass
-- temperature scaling (`/ 0.5`) improves output readability
+---
 
-## Practical scaling notes
+## 7. Practical Scaling Notes
 
-Recent experiments highlight practical limits for this compact setup:
+- **Context size 64** makes training ~7.8× slower for only +1.1% accuracy. Attention scales quadratically — this is exactly the problem Flash Attention was designed to solve.
+- **The Colab Lottery** means GPU speeds vary run to run. Use Relative Speed Ratios (comparing against a fixed baseline) rather than absolute seconds to judge whether a change is actually faster.
+- **The ~70% ceiling** on the 5k-story dataset is an information bottleneck, not a capacity bottleneck. Three experiments — bigger batch, more heads, wider embeddings — all converged on exactly 70.5%. Breaking it requires subword tokenization, not a bigger model.
 
-- Increasing `context_size` to `64` makes training much slower for only a tiny incremental accuracy gain.
-- The "Colab Lottery" means GPU speeds vary wildly. We use Relative Speed Ratios (comparing against a baseline run) instead of absolute seconds to judge if an architecture is actually faster.
+Observed run (3-layer, `batch=1536`, 5000 stories, `context_size=32`):
+- **Best accuracy:** ~70.1% at step 1600
+- **Training time:** ~143.8s (varies by GPU)
 
-Observed run (3-Layer, `batch=1536` configuration on 5,000 stories, `context_size=32`):
+---
 
-- best accuracy: `~70.1%` at step `1600` (using fixed eval seed)
-- training time: `~143.8s` (varies by GPU)
-- result: Reaches optimal generalization/intelligence under a 2.5-minute budget. While our previous 1,000-story baseline achieved higher nominal accuracy, expanding to 5,000 stories forces the model to stop memorizing and actually learn English grammar (preventing grammatical/coherence breakdown).
+## 8. Summary: What TinyTransformer Adds over TorchMLP
 
-## Why this version is stronger than TorchMLP
+`TorchMLP.py` is ideal for understanding baseline language-model mechanics. `TinyTransformer.py` keeps that readability and layers on practical modern training techniques:
 
-`TorchMLP.py` is ideal for understanding baseline language-model training mechanics.
-`TinyTransformer.py` keeps that readability but introduces practical modern training techniques:
+| Category | What was added | Effect |
+| :--- | :--- | :--- |
+| **Architecture** | 3-layer Transformer Encoder + positional embeddings | Attention-based context; word-order awareness |
+| **Speed** | `torch.compile`, float16 autocast, fused AdamW, global device default | ~2× faster GPU utilization; fits in 2-min Colab budget |
+| **Stability** | Cosine LR schedule, `betas=(0.9, 0.95)`, `weight_decay=0.01` | Smoother convergence; stops repetitive output |
+| **Reproducibility** | Fixed `eval_rng`, `torch.manual_seed(42)` | Eliminates accuracy wobble; results are trustworthy |
+| **Output quality** | Temperature scaling (`0.5`) | Cleaner text; no invented words |
 
-- attention-based sequence modeling
-- mixed precision training
-- compiled graph execution
-- fused optimizer kernels
-- learning-rate scheduling
-- scientific reproducibility (fixed eval seeds)
-
-So it is both a modeling upgrade (better context handling) and a systems upgrade (better speed/stability on GPU).
-
-## Short summary
-
-`TinyTransformer.py` is the direct next step after `TorchMLP.py`:
-
-- same task (next-character prediction)
-- stronger architecture (3-layer transformer + positional embeddings)
-- faster training stack (`torch.compile`, AMP, fused AdamW, global device)
-- safer convergence stack (cosine LR floor, balanced batch size)
-- scientific reproducibility (fixed eval seed to eliminate accuracy wobble)
-- cleaner generation via temperature scaling (`0.5`)
-
-Together these changes make training more efficient and output quality more consistent while keeping the code compact and educational.
-```
+The result is both a modeling upgrade (better context handling via attention) and a systems upgrade (better speed and stability on GPU) — while keeping the code compact enough to read in one sitting.
