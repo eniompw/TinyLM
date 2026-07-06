@@ -141,6 +141,7 @@ Everything else that's new — the 2-layer encoder (4 heads, `ffn_dim=1024`), `t
 | TinyTransformer.py (3L, ctx=32, 5000 stories, 8 heads) | 70.5% | 1800 | ~4.6× |
 | TinyTransformer.py (3L, ctx=32, 5000 stories, embed=320) | 70.5% | 1600 | ~5.5× |
 | **TinyTransformer.py (3L, ctx=32 BPE tokens, 5000 stories)** 🚀 | **50.9%†** | **1800** | **~5.3×** |
+| **TinyTransformer.py (3L, ctx=32 BPE, 5000 stories, batch=2048)** 🏆 | **50.0%†** | **1200** | **~5.0×** |
 
 *† Accuracy not comparable to character-level rows — BPE predicts 1 of 50,257 tokens vs 1 of 65 characters. See generated sample for true quality assessment.*
 
@@ -201,6 +202,9 @@ All tests below are single changes made to our baseline 2-layer TinyTransformer 
 | **Exp** | **batch=2048 on 5k stories** (ctx=32) | +0.5% vs 1536 | 1.5× slower | ❌ Same ~70% ceiling. Batch size stops helping when genuinely learning. |
 | **Exp** | **Inference Temp:** 0.7 → 0.5 | N/A (Inference) | N/A | ✅ Eliminates fake words (e.g., "throbe" → "robe"). |
 | **Exp** | **BPE Tokenization** (tiktoken gpt2, vocab=50257) | See Phase 9 | ~5.3× slower | ✅ **Breaks the 70% character ceiling** — full paragraphs & dialogue. |
+| **Exp** | **BPE + Larger Batch** (batch=2048, 1401 steps) | −0.9% vs P9 | ~1.05× faster/step | ✅ Reaches ~50% in fewer steps. Best short-budget BPE variant. |
+| **Exp** | **BPE + Weight Tying** (`linear.weight = tok_embed.weight`) | N/A | Neutral | ❌ Loss=254 at step 0 across all attempts. Init instability at vocab=50k. Reverted. |
+| **Exp** | **BPE + LR Warmup** (100-step linear + cosine) | N/A | Negligible | ❌ Did not fix tied-weight instability; unnecessary without tying. |
 
 ---
 
@@ -432,6 +436,30 @@ All tests below are single changes made to our baseline 2-layer TinyTransformer 
 >
 > 💡 **ctx=32 BPE tokens ≈ 100+ characters** — roughly 20–25 words. The model now has enough context to track subject–verb agreement, character names, and dialogue turns across a full sentence, which is reflected directly in the generated sample quality.
 
+### Phase 10: BPE Short-Budget Run & Weight-Tying Ablation
+*Goal: Fit the BPE model closer to a 2-minute Colab budget. Single change from Phase 9: `batch_size` 1536 → 2048, `n_steps` 1801 → 1401.*
+
+*Config:* `3L, ctx=32 BPE tokens, 5k stories, batch=2048, n_steps=1401, lr=2e-3, cosine LR, no weight tying`. `params: 28,159,313`.
+
+| Step | Loss | Acc | Time |
+| ---: | ---: | ---: | ---: |
+| 0 | 11.2768 | 7.6% | 33.4s |
+| 200 | 3.3718 | 36.2% | 56.2s |
+| 400 | 2.9462 | 40.1% | 79.5s |
+| 600 | 2.6206 | 43.5% | 103.3s |
+| 800 | 2.5360 | 44.5% | 127.6s |
+| 1000 | 2.4468 | 48.0% | 151.5s |
+| 1200 | 2.2626 | **50.0%** ⭐ | 175.4s |
+| 1400 | 2.2288 | 49.9% 📉 | 199.4s |
+
+**Training time: 199.4s** *(compile tax alone is 33.4s — a warm start would land near 166s)*
+
+> 💡 **Approaching the ceiling.** Loss drops only 0.034 from step 1200→1400, versus 0.18 from 1000→1200 — the batch=2048 BPE model is starting to plateau near 50%, much sooner than Phase 9's still-climbing curve at step 1800.
+>
+> 💡 **Weight tying fails at BPE scale.** Three separate attempts at `linear.weight = tok_embed.weight` — with and without a 100-step `SequentialLR` warmup — all produced **Loss ≈ 254 at step 0** and never recovered. At vocab=65 (Theme 2, Item 1) tying hurt accuracy by 3.0% due to mismatched init scale; at vocab=50,257 the failure mode is worse — the shared matrix receives contradictory gradients from the embedding lookup and output projection simultaneously, destabilizing initialization before training can even start.
+>
+> 💡 **LR warmup doesn't help.** Testing `LinearLR(start_factor=0.01, total_iters=100)` + `CosineAnnealingLR` on top of the broken tied-weight run showed no recovery. Removing tying (not adding warmup) was the actual fix.
+
 ---
 
 ## 📝 Experiment & Ablation Details
@@ -502,6 +530,11 @@ All tests below are single changes made to our baseline 2-layer TinyTransformer 
 - **Change:** Added 50-step linear LR warmup and `clip_grad_norm_(params, 1.0)` on every backward pass. Applied to the Phase 4 config (3L, ctx=32, 5k stories, batch=1536).
 - **Result:** Peak improved from **70.0% → 70.7%**, but the simpler baseline reached 70.0% faster and with less code.
 - **Takeaway:** Valid techniques, but **marginal** at this scale. Useful as a teaching example, not as a necessary addition.
+
+**8. Weight Tying at BPE Scale (vocab=50,257)**
+- **Change:** `linear.weight = tok_embed.weight` on the Phase 9 BPE config, tested with and without LR warmup.
+- **Result:** Loss=254 at step 0 in every attempt; the model never matched the untied baseline within budget.
+- **Takeaway:** Weight tying is the standard GPT-2/LLaMA memory-saving trick, but it requires careful joint initialization. In this architecture it destabilizes training at large vocab sizes (50k+) just as it hurt accuracy at small vocab (65). Verdict: ❌ don't tie weights here, for either vocab size.
 
 ---
 
@@ -583,3 +616,9 @@ All tests below are single changes made to our baseline 2-layer TinyTransformer 
 *(Full multi-paragraph structure, working dialogue, consistent pronouns — the ceiling is gone.)*
 
 *† Raw accuracy not comparable to character-level models. See [Scientific Method](#-the-scientific-method-how-we-trust-our-data) warning above.*
+
+**TinyTransformer.py — 3L, BPE tiktoken, batch=2048, 1401 steps (50.0%† — Short-Budget BPE Champion 🏆)**
+> `Once there was a little boy named Jack. He was only three years old and had lots of things he wanted to do. One day he saw something very special and he couldn't wait to find out he was very excited.`
+> `The little boy was so excited! He decided to take the track home, and soon enough he got to his mom and said, "Let's go home now!"`
+> `They held the basket until they found out it was too late. Tim's mom tried to use the other side of the bush, but it was too late. And they both went home, and they played together in the park. The sun was shining,`
+*(Full paragraphs and dialogue, reached in fewer steps than Phase 9 — best speed/quality tradeoff for BPE so far.)*
