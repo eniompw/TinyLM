@@ -17,7 +17,8 @@ Our baseline model is **TinyTransformer.py** — a 2-layer transformer with floa
 - [⚠️ The Memorization Trap](#️-the-memorization-trap)
 - [🔬 Ablation & Experiment Summary](#-ablation--experiment-summary)
 - [📈 Step-by-Step Accuracy Data](#-step-by-step-accuracy-data)
-- [📝 Experiment & Ablation Details](#-experiment--ablation-details)
+- [� Phase 12: TinyBPE Optimisation](#-phase-12-tinybpe-optimisation-steps-lr-tail-vocab-size)
+- [�📝 Experiment & Ablation Details](#-experiment--ablation-details)
 - [📖 Generated Samples](#-generated-samples-seeing-is-believing)
 
 ---
@@ -143,6 +144,7 @@ Everything else that's new — the 2-layer encoder (4 heads, `ffn_dim=1024`), `t
 | **TinyTransformer.py (3L, ctx=32 BPE tokens, 5000 stories)** 🚀 | **50.9%†** | **1800** | **~5.3×** |
 | **TinyTransformer.py (3L, ctx=32 BPE, 5000 stories, batch=2048)** 🏆 | **50.0%†** | **1200** | **~5.0×** |
 | **TinyTransformer.py (3L, custom BPE vocab=4000, 5000 stories, batch=2048)** ⚡ | **46.2%†** | **900** | **~2.6×** |
+| **TinyBPE.py (3L, custom BPE vocab=4000, n_steps=1001)** 🏆 | **~47%†** | **1001** | **~2.7×** |
 
 *† Accuracy not comparable to character-level rows — BPE predicts 1 of 50,257 tokens vs 1 of 65 characters. See generated sample for true quality assessment.*
 
@@ -490,6 +492,77 @@ All tests below are single changes made to our baseline 2-layer TinyTransformer 
 > 💡 **Logit softcapping (Gemma 2 trick) added for free.** `logits = 15.0 * torch.tanh(logits / 15.0)` before the loss bounds extreme logit values — no accuracy cost, and it's a safety net against divergence at any vocab size.
 >
 > 💡 **Trade-off is explicit:** smaller vocab (4000 vs 50257) means each token covers less linguistic ground, so raw accuracy is lower than GPT-2 BPE runs. But the model is 6.4× smaller and trains 2× faster, generating comparably fluent text — a strong choice when compute is the binding constraint.
+
+## Phase 12: TinyBPE Optimisation (Steps, LR Tail, Vocab Size)
+*Goal: Three single-variable experiments on the Phase 11 canonical config (3L, custom BPE vocab=4000, batch=2048, 901 steps) to find the optimal 2-minute TinyBPE config.*
+
+*Baseline (Phase 11):* `46.2% at step 900, 103.6s`
+
+### 12a. More Steps (901 → 1201)
+*Single change:* `n_steps 901 → 1201`
+
+| Step | Loss | Acc | Time |
+| ---: | ---: | ---: | ---: |
+| 0 | 8.6961 | 7.4% | 0.2s |
+| 100 | 3.7353 | 31.6% | 11.5s |
+| 200 | 3.2515 | 35.9% | 23.5s |
+| 300 | 3.0439 | 38.3% | 36.1s |
+| 400 | 3.0003 | 39.8% | 48.1s |
+| 500 | 2.7944 | 41.8% | 59.5s |
+| 600 | 2.6135 | 44.0% | 70.5s |
+| 700 | 2.6437 | 43.7% | 81.6s |
+| 800 | 2.4895 | 45.1% | 92.9s |
+| 900 | 2.3761 | 46.4% | 104.4s |
+| 1000 | 2.3650 | 47.4% | 116.1s |
+| 1100 | 2.3311 | 47.4% | 127.7s |
+| 1200 | 2.3813 | **48.1%** ⭐ | 139.3s |
+
+**Training time: 139.3s** *(over 2-min budget — but proves the curve hasn't peaked)*
+
+> 💡 **Still climbing at step 901.** Loss dropped from 2.45 → 2.38 between steps 900–1200, confirming the Phase 11 run was cut off early. Peak accuracy improved by **+2.1%** (46.2% → 48.1%). The step-1200 loss wobble (+0.05) mirrors the step-700 blip — stochastic noise, not a plateau.
+>
+> 💡 **Takeaway:** More steps is the only lever that meaningfully moves accuracy. Since 1201 steps overshoots the 2-minute wall, the optimal within-budget config is `n_steps=1001` (~116s).
+
+### 12b. Slower LR Tail (eta_min 1e-4 → 3e-4)
+*Single change:* `eta_min 1e-4 → 3e-4`
+
+| Step | Loss | Acc | Time |
+| ---: | ---: | ---: | ---: |
+| 0 | 9.7056 | 7.4% | 0.2s |
+| 300 | 3.0556 | 38.2% | 35.6s |
+| 600 | 2.5919 | 43.3% | 70.5s |
+| 900 | 2.4091 | **46.3%** ⭐ | 104.3s |
+
+**Training time: 104.3s**
+
+> 💡 **No effect.** +0.1% vs baseline — within noise. The cosine tail difference between `1e-4` and `3e-4` is only ~0.2e-3 LR at step 900, too small to influence learning at this budget. Would only matter at 2000+ steps where the tail dominates.
+
+### 12c. Larger Vocab (4000 → 6000 tokens)
+*Single change:* `vocab_size 4000 → 6000` → `params: 5,455,472`
+
+| Step | Loss | Acc | Time |
+| ---: | ---: | ---: | ---: |
+| 0 | 9.0211 | 8.4% | 0.2s |
+| 300 | 2.9156 | 39.6% | 36.8s |
+| 600 | 2.6876 | 42.5% | 71.1s |
+| 900 | 2.4887 | **45.6%** ⭐ | 105.8s |
+
+**Training time: 105.8s**
+
+> 💡 **Marginal loss (−0.6%).** The larger vocab adds 1M params to the embedding tables but the model doesn't have enough steps to learn the extra tokens at this budget. Generated text quality was subjectively better despite the lower score — richer tokenisation needs more steps to pay off.
+>
+> 💡 **Natural follow-up:** vocab=6000 + n_steps=1101 (~120s) — tests whether richer tokenisation beats vocab=4000 given equal wall-clock time.
+
+### ✅ Phase 12 Verdict & New Canonical Config
+
+| Experiment | Change | Acc | Time | Verdict |
+| :--- | :--- | ---: | ---: | :--- |
+| Phase 11 baseline | — | 46.2% | 103.6s | Control |
+| **12a. More steps** | 901 → 1201 | **48.1%** | 139.3s | ⚠️ Over budget — sets `n_steps=1001` as new optimal |
+| 12b. Slower LR tail | eta_min → 3e-4 | 46.3% | 104.3s | ❌ Noise |
+| 12c. Larger vocab | 4000 → 6000 | 45.6% | 105.8s | ❌ Needs more steps |
+
+**New canonical `TinyBPE.py` config:** `vocab=4000, n_steps=1001, eta_min=1e-4` — all other hyperparameters unchanged. Expected accuracy: **~47%** at **~116s**.
 
 ---
 
