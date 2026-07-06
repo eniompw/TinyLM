@@ -18,7 +18,7 @@ Our baseline model is **TinyTransformer.py** — a 2-layer transformer with floa
 - [🔬 Ablation & Experiment Summary](#-ablation--experiment-summary)
 - [📈 Step-by-Step Accuracy Data](#-step-by-step-accuracy-data)
 - [� Phase 12: TinyBPE Optimisation](#-phase-12-tinybpe-optimisation-steps-lr-tail-vocab-size)
-- [🚀 Phase 13: 10k Stories & Context Scaling](#phase-13-10k-stories--context-scaling)
+- [🚀 Phase 13: TinyBPE Scale-Up (10k Stories, Depth, Context)](#phase-13-tinybpe-scale-up-10k-stories-depth-context)
 - [�📝 Experiment & Ablation Details](#-experiment--ablation-details)
 - [📖 Generated Samples](#-generated-samples-seeing-is-believing)
 
@@ -569,10 +569,12 @@ All tests below are single changes made to our baseline 2-layer TinyTransformer 
 
 ---
 
-## Phase 13: 10k Stories & Context Scaling
-*Baseline: TinyBPE canonical config (3L, custom BPE vocab=4000, 5k stories, batch=2048, n_steps=1001, ~116s)*
+## Phase 13: TinyBPE Scale-Up (10k Stories, Depth, Context)
 
-### 13a. More Data (5k → 10k stories)
+*Baseline: TinyBPE canonical config (3L, custom BPE vocab=4000, 5k stories, batch=2048, n_steps=1001, ~116s) → 46.8%†*
+
+### 13a. More Data (5k → 10k stories, n_steps=1001)
+*Single change:* `num_stories 5000 → 10000`
 
 | Step | Loss | Acc | Time |
 | ---: | ---: | ---: | ---: |
@@ -582,11 +584,12 @@ All tests below are single changes made to our baseline 2-layer TinyTransformer 
 
 **Training time: 117.0s**
 
-> 💡 **Raw accuracy dropped ~2%** (46.8% → 44.8%) — identical pattern to the 1k→5k transition at char-level. The model is generalising rather than memorising. Generated text shows genuine improvement: multi-character interactions, subordinate clauses with motives ("Sue was sad *because* she wanted to take the car home"), and resolved story arcs. Lower score, higher real-world intelligence.
+> 💡 **Raw accuracy dropped ~2%** (46.8% → 44.8%) — identical pattern to the 1k→5k char-level transition. The model is generalising rather than memorising. Generated text shows genuine improvement: multi-character interactions, subordinate clauses with motives ("Sue was sad *because* she wanted to take the car home"), and resolved story arcs. Lower score, higher real-world intelligence.
 >
-> 💡 **Loss oscillates in the tail (steps 900–1000).** The cosine LR decays too aggressively for the harder 10k distribution, causing ±0.1 loss bounce rather than clean convergence.
+> 💡 **Loss oscillates in the tail.** The cosine LR decays too aggressively for the harder 10k distribution, causing ±0.1 loss bounce rather than clean convergence — more steps needed.
 
 ### 13b. More Steps on 10k (n_steps 1001 → 1201)
+*Single change from 13a:* `n_steps 1001 → 1201`
 
 | Step | Loss | Acc | Time |
 | ---: | ---: | ---: | ---: |
@@ -596,14 +599,17 @@ All tests below are single changes made to our baseline 2-layer TinyTransformer 
 
 **Training time: 139.8s** *(new best for 10k config)*
 
-> 💡 **+1.1% over 1001-step run** (44.8% → 45.9%). Loss still oscillating at step 1200 — model hasn't fully converged. Generates richer vocabulary ("holding a deep breath", gorilla subplot) but topic drift persists.
+> 💡 **+1.1% over 1001-step run** (44.8% → 45.9%). Loss still oscillating at step 1200 — sampling noise from batch=2048 covering only ~20% of 10k stories per step. This is a capacity ceiling, not an LR problem.
 
 ### 13c. Slower LR Tail on 10k (eta_min 1e-4 → 3e-4)
-**Result: 45.7% — no effect (−0.2% vs baseline, within noise)**
+*Single change from 13b:* `eta_min 1e-4 → 3e-4`
 
-> 💡 The oscillation in the 10k tail is **batch sampling noise**, not LR decay. With batch=2048 from 10k stories, each batch covers only ~20% of the dataset — late-training loss bounces are inherent stochasticity, not a scheduler problem. `eta_min` tuning cannot fix this.
+**Peak: 45.7% at step 1200, 139.6s — no effect (−0.2% vs 13b, within noise)**
 
-### 13d. Deeper Model on 10k (n_layers 3 → 4, n_steps=801, warm)
+> 💡 The tail oscillation is **batch sampling variance**, not LR decay. With batch=2048 from 10k stories, each batch covers ~20% of the dataset — late-training loss bounces are inherent stochasticity. `eta_min` tuning cannot fix this. ❌ Don't bother.
+
+### 13d. Deeper Model (n_layers 3 → 4, n_steps=801, warm compile)
+*Single change from 13b:* `n_layers 3 → 4, n_steps 1201 → 801`
 
 | Step | Loss | Acc | Time |
 | ---: | ---: | ---: | ---: |
@@ -613,9 +619,10 @@ All tests below are single changes made to our baseline 2-layer TinyTransformer 
 
 **Training time: 124.4s**
 
-> 💡 **4L/801 steps (44.3%) does not beat 3L/1201 steps (45.9%) within the 2-minute budget.** 4L needs ~1100 steps to reach its peak, but that costs 241s. This confirms the char-level finding: 4L only pays off with unconstrained training time. Within 2 minutes, **3L is optimal**.
+> 💡 **4L/801 steps (44.3%) does not beat 3L/1201 steps (45.9%) within the 2-minute budget.** 4L needs ~1100 steps to reach its peak but that costs 241s — confirmed by earlier 4L/1401-step cold run peaking at 47.5% at step 1100. Within 2 minutes, **3L is optimal.**
 
 ### 13e. Longer Context (context_size 32 → 64 BPE tokens, n_steps=401)
+*Single change from 13b:* `context_size 32 → 64, n_steps 1201 → 401`
 
 | Step | Loss | Acc | Time |
 | ---: | ---: | ---: | ---: |
@@ -627,25 +634,40 @@ All tests below are single changes made to our baseline 2-layer TinyTransformer 
 
 **Training time: 120.7s** *(~30s/100 steps — 2.5× slower than ctx=32)*
 
-> 💡 **Lower accuracy, higher story quality.** ctx=64 is only at **37.7% after 401 steps** vs ctx=32 hitting **39.9% by step 400** — it's behind because the cosine LR is decaying over only 401 steps, so it runs out of learning rate too fast. The story quality is noticeably better: descriptive object introductions ("a big wheel! It was big and bright and looked very inviting"), story-level conclusion structure ("The moral of the story is that...") never seen in ctx=32 runs, and properly attributed multi-turn dialogue. Character swap (Jack → Sue mid-paragraph) and pronoun confusion persist — 401 steps isn't enough for the model to learn long-range coreference with the wider window.
+> 💡 **Lower accuracy, higher story quality.** ctx=64 BPE ≈ 40–50 words gives the model enough context to produce story-level conclusions ("The moral of the story is...") and descriptive scene-setting absent from all ctx=32 runs. Character swap mid-paragraph persists — 401 steps is too few for the model to learn long-range coreference with the wider window.
 >
-> 💡 **LR decays too fast at 401 steps.** The cosine schedule exhausts itself before the model converges on the harder ctx=64 task. Natural follow-up: `n_steps=401, eta_min=5e-4` (much slower tail) or accept ctx=64 as an out-of-budget qualitative experiment only.
->
-> 💡 **ctx=64 is an out-of-budget qualitative win.** Within the 2-minute constraint, ctx=32 remains the optimal config. ctx=64 is best framed as a "what if you had 5 minutes" variant — same architecture, dramatically better narrative structure.
+> 💡 **ctx=64 is an out-of-budget qualitative experiment.** ~30s/100 steps means only ~400 steps fit in 2 minutes — not enough to converge. Best framed as a "what if you had 5 minutes" variant. Within the 2-minute constraint, ctx=32 remains optimal.
 
-### ✅ Phase 13 Verdict
+### 13f. Larger Vocab on 10k (vocab=4000 → 6000, n_steps=1201)
+*Single change from 13b:* `vocab_size 4000 → 6000` → `params: 5,455,472`
+
+| Step | Loss | Acc | Time |
+| ---: | ---: | ---: | ---: |
+| 0 | 9.0729 | 8.0% | 0.3s |
+| 500 | 2.9268 | 41.4% | 80.5s |
+| 900 | 2.6630 | **45.7%** ⭐ | 143.1s |
+| 1200 | 2.4774 | 45.0% | 188.8s |
+
+**Training time: 188.8s**
+
+> 💡 **vocab=6000 underperforms vocab=4000** (45.0% vs 45.9%) and takes 35% more time (188s vs 140s). Loss still declining at step 1200 — the larger vocab needs ~1600+ steps to beat vocab=4000, which costs ~250s. Not budget-viable.
+>
+> 💡 **vocab=4000 is definitively optimal for the 2-minute budget.** Tested at both 5k and 10k stories, at 901 and 1201 steps — it consistently outperforms vocab=6000 within the time constraint.
+
+### ✅ Phase 13 Verdict & New Canonical Config
 
 | Experiment | Change | Acc | Time | Verdict |
 | :--- | :--- | ---: | ---: | :--- |
-| 13a. More data | 5k → 10k stories | 44.8% | 117s | ✅ Lower acc, better quality — new canonical data size |
-| **13b. More steps** | 1001 → 1201 | **45.9%** | 139.8s | ✅ New 3L best within budget |
-| 13c. Slower LR tail | eta_min → 3e-4 | 45.7% | 139.6s | ❌ Noise — oscillation is sampling variance, not LR |
-| 13d. 4 layers | n_layers=4, 801 steps | 44.3% | 124.4s | ❌ Needs 241s to beat 3L — not budget-viable |
-| 13e. ctx=64 | context_size 32→64, 401 steps | 37.7% | 120.7s | ⚠️ Lower acc (LR decays too fast), but clear quality win — out-of-budget variant |
+| 13a. More data | 5k → 10k stories | 44.8% | 117s | ✅ Better quality, lower raw score |
+| **13b. More steps** | 1001 → 1201 | **45.9%** ⭐ | 140s | ✅ New best — sets new canonical |
+| 13c. Slower LR tail | eta_min → 3e-4 | 45.7% | 140s | ❌ Noise — sampling variance, not LR |
+| 13d. 4 layers | n_layers=4, 801 steps | 44.3% | 124s | ❌ Needs 241s to beat 3L — not budget-viable |
+| 13e. ctx=64 | context_size 32→64 | 37.7% | 121s | ⚠️ Better quality, too slow for full run |
+| 13f. Larger vocab | vocab 4000→6000 | 45.0% | 189s | ❌ Needs 250s to converge — not budget-viable |
 
-**New canonical `TinyBPE.py` config:** `num_stories=10000, n_steps=1201, context_size=32` — all other hyperparameters unchanged. Expected accuracy: **~45.9%** at **~140s**.
+**New canonical `TinyBPE.py` config:** `vocab=4000, num_stories=10000, n_steps=1201, eta_min=1e-4` — all other hyperparameters unchanged. Expected accuracy: **~45.9%†** at **~140s**.
 
-> 💡 **Two paths forward:** (1) Stay in budget — `ctx=32, 10k stories, 1201 steps` remains the best config (~45.9%). (2) Out-of-budget quality run — `ctx=64, 10k stories, n_steps=1001, eta_min=5e-4` (~300s) — the only config likely to actually fix the character-swap problem.
+*† Accuracy not comparable to character-level rows — BPE predicts 1 of 4,000 tokens vs 1 of 65 characters.*
 
 ---
 
