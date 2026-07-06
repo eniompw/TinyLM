@@ -1,6 +1,6 @@
 # 🤖 TinyLM: Build Your Own Mini AI
 
-TinyLM is a hands-on playground for building and training small, character-level language models from scratch. Instead of guessing whole words like ChatGPT, these models learn to guess the *next letter* in a sentence.
+TinyLM is a hands-on playground for building and training small language models from scratch. Models start by predicting the *next letter* in a sentence, and progress all the way to predicting *subword tokens* using BPE tokenization — the same technique used by GPT.
 
 The code is intentionally kept short so you can read the entire training and text-generation process in one sitting.
 
@@ -26,9 +26,10 @@ We didn't start with a complex AI — we built up to it, upgrading one thing at 
 - **[TinyTransformer.py](TinyTransformer.py) — The Workhorse:** Our baseline for all experiments in BENCHMARKS.md. Adds mixed precision (float16) and a cosine learning rate schedule for faster, more stable training.
 - **[TinyTransformerClass.py](TinyTransformerClass.py) — The Cleanup:** Identical to the above, reorganized using Object-Oriented Programming (OOP) to match standard professional PyTorch style.
 
-### Level 3: Modern AI (Llama Architecture)
+### Level 3: Modern AI (Llama Architecture & Subword Tokenization)
 
 - **[TinyLlama.py](TinyLlama.py) — The Modern Era:** Rebuilds the model using the same architectural tricks as Meta's Llama. Swaps in **RoPE** (smarter positional encoding), **RMSNorm** (better layer normalization), and **SiLU** (a smoother activation function). Uses `torch.compile` for a significant GPU speedup.
+- **[TinyBPE.py](TinyBPE.py) — The Tokenizer Upgrade:** Replaces character-level tokenization with a custom **BPE (Byte-Pair Encoding)** tokenizer trained directly on TinyStories. A context window of 32 BPE tokens now covers ~20 words instead of ~5 characters — breaking the information ceiling that all character-level models share. Same architecture as `TinyTransformer.py`, smarter data.
 
 ---
 
@@ -41,7 +42,8 @@ We didn't start with a complex AI — we built up to it, upgrading one thing at 
 | [LICENSE](LICENSE) | Repository license. |
 | **Datasets** | |
 | [names_dataset.py](names_dataset.py) | Loads the names dataset used by `NameSLP.py`. |
-| [tinystories_dataset.py](tinystories_dataset.py) | Streams the TinyStories dataset for all other models. |
+| [tinystories_dataset.py](tinystories_dataset.py) | Streams TinyStories for all models. Provides `load_tinystories` (character-level) and `load_tinystories_bpe` (subword BPE). |
+| [TinyBPE.py](TinyBPE.py) | Trains and applies a custom BPE tokenizer on TinyStories, then trains a transformer over subword tokens. |
 | **Explained Guides** | |
 | [TinyMLP-explained.md](TinyMLP-explained.md) | Walkthrough of `TinyMLP.py`: data flow, tensor shapes, and gradients. |
 | [TorchMLP-Explained.md](TorchMLP-Explained.md) | Walkthrough of `TorchMLP.py`: the PyTorch rewrite and autograd. |
@@ -63,6 +65,7 @@ This project is designed to run on **Google Colab** using a free T4 GPU.
 - `numpy` — math
 - `cupy` — GPU math for the early models
 - `datasets` — Hugging Face library to stream TinyStories
+- `tokenizers` — Hugging Face library to train and run the BPE tokenizer (`TinyBPE.py`)
 - `torch` — PyTorch, for building and training the neural networks
 
 *Note: [TorchMLP.py](TorchMLP.py) and [SimpleTransformer.py](SimpleTransformer.py) can run on CPU, but will be significantly slower.*
@@ -72,7 +75,7 @@ This project is designed to run on **Google Colab** using a free T4 GPU.
 ## 📖 The Datasets
 
 - **`names.txt`** — A list of real names from Andrej Karpathy's `makemore` project. Used to teach the AI how to spell names.
-- **TinyStories** — Simple, AI-generated children's stories from Hugging Face. We process this **character by character**, keeping the project simple and educational.
+- **TinyStories** — Simple, AI-generated children's stories from Hugging Face. Character-level models process this letter by letter; `TinyBPE.py` uses a custom BPE tokenizer trained on the same corpus.
 
 ---
 
