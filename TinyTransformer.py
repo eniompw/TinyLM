@@ -1,6 +1,6 @@
 import time, torch
 import torch.nn as nn, torch.nn.functional as F
-from tinystories_dataset import load_tinystories
+# from tinystories_dataset import load_tinystories
 
 # Automatically create all tensors on GPU if available, removing manual device boilerplate
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -19,16 +19,15 @@ n_steps      = 1801                                                             
 temp         = 0.5                                                                                # DECREASED: 0.7 -> 0.5. Makes the model more confident, eliminating fake words like "throbe".
 
 # --- Data & Tokenization ---
-input_ids, target_ids, idx_to_char, token_ids = load_tinystories(num_stories=num_stories, context_size=context_size) # previous chars to predict next
-input_ids, target_ids = torch.tensor(input_ids), torch.tensor(target_ids)                         # convert to tensors
+input_ids, target_ids, idx_to_char, token_ids, vocab_size = load_tinystories(num_stories=num_stories, context_size=context_size) # previous chars to predict next
 
 # --- Model ---
 torch.manual_seed(0)                                                                              # seed helper for reproducibility
 eval_rng = torch.Generator(device=device).manual_seed(0)                                          # FIXED: Dedicated GPU generator to eliminate accuracy noise!
-tok_embed = nn.Embedding(len(idx_to_char), embed_dim)                                             # token embedding lookup layer
+tok_embed = nn.Embedding(vocab_size, embed_dim)                                                   # token embedding lookup layer
 pos_embed = nn.Embedding(context_size, embed_dim)                                                 # positional embedding for sequence order
 transformer = torch.compile(nn.TransformerEncoder(nn.TransformerEncoderLayer(embed_dim, n_heads, ffn_dim, batch_first=True, dropout=0., norm_first=True), n_layers))
-linear = nn.Linear(embed_dim, len(idx_to_char))                                                   # maps hidden state to logits (vocab length)
+linear = nn.Linear(embed_dim, vocab_size)                                                         # maps hidden state to logits (vocab length)
 
 params = list(tok_embed.parameters()) + list(pos_embed.parameters()) + list(transformer.parameters()) + list(linear.parameters())
 print(f"params: {sum(p.numel() for p in params):,}")
