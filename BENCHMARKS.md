@@ -142,6 +142,7 @@ Everything else that's new — the 2-layer encoder (4 heads, `ffn_dim=1024`), `t
 | TinyTransformer.py (3L, ctx=32, 5000 stories, embed=320) | 70.5% | 1600 | ~5.5× |
 | **TinyTransformer.py (3L, ctx=32 BPE tokens, 5000 stories)** 🚀 | **50.9%†** | **1800** | **~5.3×** |
 | **TinyTransformer.py (3L, ctx=32 BPE, 5000 stories, batch=2048)** 🏆 | **50.0%†** | **1200** | **~5.0×** |
+| **TinyTransformer.py (3L, custom BPE vocab=4000, 5000 stories, batch=2048)** ⚡ | **46.2%†** | **900** | **~2.6×** |
 
 *† Accuracy not comparable to character-level rows — BPE predicts 1 of 50,257 tokens vs 1 of 65 characters. See generated sample for true quality assessment.*
 
@@ -205,6 +206,8 @@ All tests below are single changes made to our baseline 2-layer TinyTransformer 
 | **Exp** | **BPE + Larger Batch** (batch=2048, 1401 steps) | −0.9% vs P9 | ~1.05× faster/step | ✅ Reaches ~50% in fewer steps. Best short-budget BPE variant. |
 | **Exp** | **BPE + Weight Tying** (`linear.weight = tok_embed.weight`) | N/A | Neutral | ❌ Loss=254 at step 0 across all attempts. Init instability at vocab=50k. Reverted. |
 | **Exp** | **BPE + LR Warmup** (100-step linear + cosine) | N/A | Negligible | ❌ Did not fix tied-weight instability; unnecessary without tying. |
+| **Exp** | **Custom BPE** (vocab=4000, trained on TinyStories) | −3.8% vs P9/P10 BPE | **~2× faster** | ✅ 4.43M params (vs 28M), fits in 103.6s. Best size/speed tradeoff. |
+| **Exp** | **Logit Softcapping** (±15, Gemma 2 style) | Neutral | Negligible | ✅ Stable training, no NaN issues at custom vocab scale. |
 
 ---
 
@@ -460,6 +463,34 @@ All tests below are single changes made to our baseline 2-layer TinyTransformer 
 >
 > 💡 **LR warmup doesn't help.** Testing `LinearLR(start_factor=0.01, total_iters=100)` + `CosineAnnealingLR` on top of the broken tied-weight run showed no recovery. Removing tying (not adding warmup) was the actual fix.
 
+### Phase 11: Custom Small-Vocab BPE (2-Minute Champion)
+*Goal: GPT-2's 50,257-token vocab is oversized for TinyStories. Train a custom BPE tokenizer directly on the TinyStories corpus with a much smaller vocab, cutting embedding-table size dramatically.*
+
+*Config:* `3L, ctx=32 custom-BPE tokens, 5k stories, batch=2048, n_steps=901, lr=2e-3, cosine LR, logit softcapping (±15), warm-compiled`. Tokenizer: HuggingFace `tokenizers` BPE trained from scratch on the TinyStories text, `vocab_size=4000`. `params: 4,429,472` (vs 28,159,313 for GPT-2 BPE — an 84% reduction).
+
+| Step | Loss | Acc | Time |
+| ---: | ---: | ---: | ---: |
+| 0 | 8.6952 | 7.4% | 0.2s |
+| 100 | 3.7445 | 31.8% | 11.1s |
+| 200 | 3.2566 | 35.4% | 22.5s |
+| 300 | 3.0530 | 38.2% | 34.8s |
+| 400 | 2.9823 | 40.2% | 47.3s |
+| 500 | 2.7751 | 41.7% | 58.9s |
+| 600 | 2.5971 | 43.7% | 70.2s |
+| 700 | 2.6493 | 43.7% | 81.2s |
+| 800 | 2.5199 | 43.8% | 92.2s |
+| 900 | 2.4410 | **46.2%** ⭐ | 103.6s |
+
+**Training time: 103.6s** *(well under the 2-minute budget, including warm compile)*
+
+> 💡 **6.4× smaller model, comparable learning curve.** At 4.43M params (vs 28M for GPT-2 BPE), the custom-vocab model reaches 46.2% in 900 steps — lower than Phase 9/10's ~50%, but in roughly half the wall-clock time, with an embedding table 92% smaller.
+>
+> 💡 **Custom vocab trains fast.** Training the 4000-token BPE tokenizer directly on the 5k-story corpus took only a few seconds and required no external dependency beyond HuggingFace `tokenizers`.
+>
+> 💡 **Logit softcapping (Gemma 2 trick) added for free.** `logits = 15.0 * torch.tanh(logits / 15.0)` before the loss bounds extreme logit values — no accuracy cost, and it's a safety net against divergence at any vocab size.
+>
+> 💡 **Trade-off is explicit:** smaller vocab (4000 vs 50257) means each token covers less linguistic ground, so raw accuracy is lower than GPT-2 BPE runs. But the model is 6.4× smaller and trains 2× faster, generating comparably fluent text — a strong choice when compute is the binding constraint.
+
 ---
 
 ## 📝 Experiment & Ablation Details
@@ -570,6 +601,11 @@ All tests below are single changes made to our baseline 2-layer TinyTransformer 
 - **Result:** Loss still falling at step 1800 (no plateau), 28M params (26M in embeddings), training time 211s. Generated text shows full multi-paragraph coherence, proper dialogue, and correct pronoun tracking.
 - **Takeaway:** The ~70% character-level ceiling was always an **information ceiling**, not a capacity ceiling. ctx=32 BPE tokens ≈ 100+ characters, giving the model a ~20-word memory vs the previous ~5 words. The architecture didn't change — the information did.
 
+**7. Custom Small-Vocab BPE (vocab=4000 vs 50,257)**
+- **Change:** Trained a BPE tokenizer from scratch on the TinyStories corpus (HuggingFace `tokenizers`, `vocab_size=4000`) instead of using GPT-2's pretrained 50,257-token vocab. Added logit softcapping (±15) for stability.
+- **Result:** 4,429,472 params (down from 28,159,313), 46.2% accuracy at step 900, 103.6s total training time.
+- **Takeaway:** GPT-2's vocab is built for general English text, not a 1,500-word children's-story corpus. A right-sized vocabulary cuts embedding parameters by 84% and roughly halves training time, at a modest accuracy cost versus the oversized vocab. This is the best speed/size tradeoff in the BPE family so far.
+
 ---
 
 ## 📖 Generated Samples (Seeing is Believing)
@@ -622,3 +658,10 @@ All tests below are single changes made to our baseline 2-layer TinyTransformer 
 > `The little boy was so excited! He decided to take the track home, and soon enough he got to his mom and said, "Let's go home now!"`
 > `They held the basket until they found out it was too late. Tim's mom tried to use the other side of the bush, but it was too late. And they both went home, and they played together in the park. The sun was shining,`
 *(Full paragraphs and dialogue, reached in fewer steps than Phase 9 — best speed/quality tradeoff for BPE so far.)*
+
+**TinyTransformer.py — 3L, custom BPE vocab=4000, batch=2048, 901 steps (46.2%† — 2-Min Champion ⚡)**
+> `Once there was a little boy named Jack. He was only three years old and had lots of things he wanted to do. One day he saw something very special.`
+> `The boy's parents had an idea. He felt so happy, and he wore a nice story together.`
+> `The elderly thanked his mom and dad for help. They learned to be careful, when they were ready to eat.`
+> `Once upon a time, there was a little dog named Max. Max was a very good friend. He loved to play with his friends. One day, Max found a big, shiny thing. He thought it was very good at it.`
+*(Clean decoded output, multiple story arcs, only 4.43M params — best size-to-quality ratio tested.)*
