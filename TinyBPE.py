@@ -7,20 +7,20 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 torch.set_default_device(device)
 
 # --- Hyperparameters ---
-num_stories  = 5000                                                                               # stories to train on — large enough to avoid memorisation
+num_stories  = 10000                                                                              # 10k stories: best data size within 2-min budget (Phase 13a/b)
 context_size = 32                                                                                 # BPE tokens per context window (~20-25 words, vs ~5 words for char-level)
 embed_dim    = 256                                                                                # token/positional embedding dimension (d_model)
 n_heads      = 4                                                                                  # number of attention heads in each transformer layer
 ffn_dim      = 1024                                                                               # feed-forward network hidden dimension
-n_layers     = 3                                                                                  # 3 layers is the sweet spot for depth vs speed
+n_layers     = 3                                                                                  # 3 layers is the sweet spot for depth vs speed (Phase 13d)
 batch_size   = 2048                                                                               # large batch + high LR is the key driver of fast convergence
 lr           = 2e-3                                                                               # high learning rate to match the large batch
-n_steps      = 1001                                                                               # tuned to ~116s: maximises steps within the 2-min budget
+n_steps      = 1201                                                                               # optimal steps within 2-min budget: ~140s (Phase 13b)
 temp         = 0.7                                                                                # sampling temperature — higher = more creative, lower = more accurate
 softcap      = 15.0                                                                               # Gemma 2 logit softcapping: bounds extreme logits, prevents divergence
 
 # --- Data & Tokenization ---
-input_ids, target_ids, tokenizer, encoded, vocab_size = load_tinystories_bpe(num_stories, context_size) # custom BPE vocab=4000 trained on TinyStories corpus
+input_ids, target_ids, tokenizer, encoded, vocab_size = load_tinystories_bpe(num_stories, context_size) # custom BPE vocab=4000 trained on TinyStories corpus (Phase 13f: 4000 beats 6000 in budget)
 
 # --- Model ---
 torch.manual_seed(0)                                                                              # seed for reproducibility
