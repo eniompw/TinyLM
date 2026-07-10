@@ -6,20 +6,19 @@ from tinystories_dataset import load_tinystories
 torch.set_default_device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # --- Hyperparameters ---
-num_stories  = 200                                                                                # number of stories loaded from TinyStories dataset
-context_size = 8                                                                                  # number of previous tokens used to predict next
+num_stories  = 5000                                                                               # number of stories loaded from TinyStories dataset
+context_size = 32                                                                                 # number of previous tokens used to predict next
 embed_dim    = 128                                                                                # token/positional embedding dimension (d_model)
 n_heads      = 4                                                                                  # number of attention heads in each transformer layer
 ffn_dim      = 256                                                                                # feed-forward network hidden dimension
-n_layers     = 2                                                                                  # number of transformer encoder layers
-batch_size   = 1024                                                                               # number of samples per training step
-lr           = 1e-3                                                                               # learning rate
-n_steps      = 2001                                                                               # total training steps
-temp         = 0.7                                                                                # temperature for sampling during generation
+n_layers     = 3                                                                                  # number of transformer encoder layers
+batch_size   = 1536                                                                               # number of samples per training step
+lr           = 2e-3                                                                               # learning rate
+n_steps      = 1801                                                                               # total training steps
+temp         = 0.5                                                                                # temperature for sampling during generation
 
 # --- Data & Tokenization ---
-input_ids, target_ids, idx_to_char, token_ids = load_tinystories(num_stories=num_stories, context_size=context_size) # previous chars to predict next
-input_ids, target_ids = torch.tensor(input_ids), torch.tensor(target_ids)                          # convert to tensors
+input_ids, target_ids, idx_to_char, token_ids, _ = load_tinystories(num_stories=num_stories, context_size=context_size) # previous chars to predict next
 
 # --- Model ---
 torch.manual_seed(42)                                                                             # seed helper for reproducibility
@@ -30,6 +29,7 @@ linear      = nn.Linear(embed_dim, len(idx_to_char))                            
 
 params    = list(tok_embed.parameters()) + list(pos_embed.parameters()) + list(transformer.parameters()) + list(linear.parameters())
 optimizer = torch.optim.Adam(params, lr=lr)                                                       # optimizer replaces manual parameter updates
+print(f"params: {sum(p.numel() for p in params):,}")                                              # total trainable parameter count
 
 # --- Train ---
 start = time.time()                                                                               # track training duration
@@ -41,9 +41,9 @@ for step in range(n_steps):
 
     if step % 200 == 0:
         with torch.no_grad():                                                                     # disable tracking during evaluation
-            x_eval = tok_embed(input_ids) + pos_embed(torch.arange(context_size))                 # embed full dataset
-            pred_ids = linear(transformer(x_eval)[:, -1, :]).argmax(1)                            # full dataset forward & argmax
-            print(f"Step {step:4d} | Loss: {loss:.4f} | Acc: {(pred_ids == target_ids).float().mean():.1%} | {time.time()-start:.1f}s")
+            eval_idx = torch.randint(0, len(input_ids), (4096,), generator=torch.Generator(device=input_ids.device).manual_seed(0)) # fixed seed eval sample to eliminate accuracy wobble
+            pred_ids = linear(transformer(tok_embed(input_ids[eval_idx]) + pos_embed(torch.arange(context_size)))[:, -1, :]).argmax(1) # subsample forward & argmax
+            print(f"Step {step:4d} | Loss: {loss:.4f} | Acc: {(pred_ids == target_ids[eval_idx]).float().mean():.1%} | {time.time()-start:.1f}s")
 
 print(f"Training time: {time.time() - start:.1f}s")
 
