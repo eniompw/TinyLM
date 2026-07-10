@@ -144,25 +144,22 @@ Everything else that's new — the 2-layer encoder (4 heads, `ffn_dim=1024`), `t
 
 *Goal: Prove the tokenizer swap alone (character → BPE) improves text quality, using `SimpleTransformer.py`'s minimal code style with zero architectural changes.*
 
-*Config: 3L, ctx=32 BPE tokens, vocab=4000, batch=1536, lr=2e-3, n_steps=1801, Adam flat LR. `params: 1,429,536`*
+| Model | Params | Data | Context | Vocab | d_model / heads / layers / FFN | Optimizer | Steps | Time | Loss | Fixed train-sample accuracy |
+|---|---:|---:|---:|---:|---|---|---:|---:|---:|---:|
+| SimpleBPE | 1,429,536 | 5,000 TinyStories | 32 BPE tokens | 4,000 | 128 / 4 / 3 / 256 | AdamW, lr=2e-3 | 1,801 | 133.5s | 2.6078 | 42.6% |
 
-| Step | Loss | Acc | Time |
-| ---: | ---: | ---: | ---: |
-| 0 | 8.5443 | 2.1% | 0.2s |
-| 200 | 3.6637 | 30.7% | 18.5s |
-| 400 | 3.3484 | 34.4% | 36.5s |
-| 600 | 3.1490 | 36.5% | 53.7s |
-| 800 | 2.9328 | 38.1% | 70.7s |
-| 1000 | 2.8415 | 38.9% | 88.1s |
-| 1200 | 2.6802 | 39.6% | 105.6s |
-| 1400 | 2.6610 | 40.9% | 123.3s |
-| 1600 | 2.7252 | 41.7% | 140.7s |
-| 1800 | 2.5975 | **42.2%** ⭐ | 157.9s |
+### SimpleBPE run notes
 
-**Training time: 157.9s**
+- Seed: `torch.manual_seed(0)`.
+- Evaluation: one fixed random sample of 4,096 contexts, created before training from `input_ids`.
+- Architecture: 3-layer PyTorch `TransformerEncoder`, Pre-LN (`norm_first=True`), zero dropout.
+- Optimizer: `AdamW(params, lr=2e-3)`; PyTorch's default `weight_decay` is `0.01`.
+- The reported metric is sampled training-context next-token accuracy, **not** held-out validation or test accuracy. The fixed subset reliably shows within-run learning progress only.
+- Throughput: 13.5 steps/s (0.0741 s/step).
+- Learning curve: 0.5% at step 0, 30.6% at step 200, 39.4% at step 1200, and 42.6% at step 1800.
+- Qualitative sample: coherent short-story syntax, but semantic errors remain (for example, "bouncy glass").
 
-**Generated sample:**
-> ` fun. It was a good friend, a little girl named Lily. Lily loved to play with her ball and share it with her friends. One day,`
+> ⚠️ **Environment note:** Record the GPU model, PyTorch/CUDA versions, and whether `torch.compile` was enabled beside future benchmark results. A seed improves repeatability but does not guarantee identical results across platforms, versions, or some CUDA operations.
 
 ### Optimisation attempt: batch=2048 + cosine LR, n_steps=1601
 
@@ -200,6 +197,7 @@ Everything else that's new — the 2-layer encoder (4 heads, `ffn_dim=1024`), `t
 | TinyMLP.py | 59.4% | 2000 | 0.2× |
 | TorchMLP.py | 62.4% | 2000 | 0.2× |
 | SimpleTransformer.py | 67.2% | 2000 | 1.8× |
+| SimpleBPE.py (fixed train-sample accuracy) | 42.6%† | 1801 | ~3.6× |
 | **TinyTransformer.py (2 layers)** 🥇 | **68.4%** | **2000** | **1.0× (Control)** |
 | TinyTransformer.py (context=64) | 68.5% | 1800 | 10.0× |
 | TinyTransformer.py (Narrow-Deep 4L, 810K params) | 68.9% | 2400 | 3.5× |
@@ -223,7 +221,7 @@ Everything else that's new — the 2-layer encoder (4 heads, `ffn_dim=1024`), `t
 | **TinyBPE.py (3L, custom BPE vocab=4000, n_steps=1001)** 🏆 | **~47%†** | **1001** | **~2.7×** |
 | **TinyBPE.py (3L, custom BPE vocab=4000, 10k stories, n_steps=1201)** 🏆 | **~45.9%†** | **1201** | **~3.2×** |
 
-*† Accuracy not comparable to character-level rows — BPE predicts 1 of 50,257 tokens vs 1 of 65 characters. See generated sample for true quality assessment.*
+*† Accuracy is not comparable to character-level rows: BPE models predict tokens from vocabularies of 4,000 or 50,257 tokens, rather than 65 characters. SimpleBPE's score is additionally measured on a fixed sample of training contexts, not a held-out split. See generated samples for quality assessment.*
 
 ---
 
