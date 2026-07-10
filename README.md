@@ -22,7 +22,7 @@ We didn't start with a complex AI — we built up to it, upgrading one thing at 
 
 ### Level 2: Enter the Transformer (The "Brain" Upgrade)
 
-- **[SimpleTransformer.py](SimpleTransformer.py) — The Bridge:** Adds a 2-layer Transformer Encoder on top of the PyTorch MLP. This gives the model *attention* — the ability to read the whole context window, not just the last few letters.
+- **[SimpleTransformer.py](SimpleTransformer.py) — The Bridge:** Adds a 3-layer Transformer Encoder on top of the PyTorch MLP. This gives the model *attention* — the ability to read the whole context window, not just the last few letters.
 - **[TinyTransformer.py](TinyTransformer.py) — The Workhorse:** Our baseline for all experiments in BENCHMARKS.md. Adds mixed precision (float16) and a cosine learning rate schedule for faster, more stable training.
 - **[TinyTransformerClass.py](TinyTransformerClass.py) — The Cleanup:** Identical to the above, reorganized using Object-Oriented Programming (OOP) to match standard professional PyTorch style.
 
