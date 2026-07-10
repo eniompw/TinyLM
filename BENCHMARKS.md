@@ -13,6 +13,7 @@ Our baseline model is **TinyTransformer.py** — a 2-layer transformer with floa
 - [🔬 The Scientific Method: How We Trust Our Data](#-the-scientific-method-how-we-trust-our-data)
 - [🧬 Lineage: From MLP-Digits to TinyTransformer](#-lineage-from-mlp-digits-to-tinytransformer)
 - [🔧 The Default Stack: SimpleTransformer → TinyTransformer](#-the-default-stack-simpletransformer--tinytransformer)
+- [🔧 SimpleTransformer Optimisation (Character-Level Baseline)](#-simpletransformer-optimisation-character-level-baseline)
 - [📊 The Leaderboard: Model Comparison](#-the-leaderboard-model-comparison)
 - [⚠️ The Memorization Trap](#️-the-memorization-trap)
 - [🔬 Ablation & Experiment Summary](#-ablation--experiment-summary)
@@ -112,6 +113,30 @@ Everything else that's new — the 2-layer encoder (4 heads, `ffn_dim=1024`), `t
 | **Inference temperature** | 0.7 (hardcoded) | 0.5 (parameterized) | N/A | N/A | Eliminates invented words ("throbe" → "robe") |
 
 > 💡 **The takeaway:** `torch.compile` + `float16` are the **speed engine**. `CosineAnnealingLR` + `AdamW`/`weight_decay` are the **quality polish**. `eval_rng` is the **scientific control**. All five originate from [Keller Jordan's modded-nanogpt](https://github.com/KellerJordan/modded-nanogpt), but each earned its place only after local ablations confirmed it at this tiny scale.
+
+---
+
+## 🔧 SimpleTransformer Optimisation (Character-Level Baseline)
+
+*Goal: Squeeze maximum accuracy from `SimpleTransformer.py` within a 2-minute Colab budget, changing only hyperparameters (zero new lines of code).*
+
+*Baseline: Original config (2L, ctx=8, 200 stories, batch=1024, lr=1e-3) → 67.2% at step 2000, 36.6s*
+
+| Change | Acc | Time | Verdict |
+| :--- | ---: | ---: | :--- |
+| Baseline (original) | 67.2% | 36.6s | Control |
+| 3L + batch=1536 + lr=2e-3 + 1000 stories | 67.3% | 36.6s | ✅ Matches baseline faster |
+| + ctx=32 + 5000 stories + eval subsample | 66.6% | 151.1s | ✅ Much cleaner text, no memorisation |
+| + weight_decay=0.01 | 46.0% | 200.8s | ❌ Crushes 128d model — too small for regularisation |
+| + embed_dim=256, ffn=512 (1.6M params) | ~63% | >240s | ❌ Over budget — compile tax ~28s alone |
+
+**New canonical `SimpleTransformer.py` config:** `3L, ctx=32, 5000 stories, batch=1536, lr=2e-3, n_steps=1801, temp=0.5` → **~66.6% in ~151s**
+
+> 💡 **`weight_decay` doesn't transfer.** The benchmark's `weight_decay=0.01` result was measured on `embed_dim=256`. At `embed_dim=128` with only 420K params, the same value collapses accuracy to ~46% — the regularisation overwhelms a model this small.
+
+> 💡 **Eval OOM fix.** With `ctx=32` and 5000 stories, embedding the full dataset at eval time tries to allocate ~62GB. Fix: subsample 4096 rows with a fixed generator seed (`manual_seed(0)`) — eliminates OOM and stabilises the accuracy curve by always measuring the same rows.
+
+> 💡 **Capacity ceiling confirmed at 420K params.** Accuracy plateaued at ~66-67% from step 1600 onward regardless of further steps. Breaking it requires graduating to `TinyTransformer.py`'s optimizer stack (AdamW + cosine LR + float16).
 
 ---
 
