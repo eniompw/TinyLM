@@ -23,6 +23,7 @@ We didn't start with a complex AI — we built up to it, upgrading one thing at 
 ### Level 2: Enter the Transformer (The "Brain" Upgrade)
 
 - **[SimpleTransformer.py](SimpleTransformer.py) — The Bridge:** Adds a 3-layer Transformer Encoder on top of the PyTorch MLP. This gives the model *attention* — the ability to read the whole context window, not just the last few letters.
+- **[SimpleBPE.py](SimpleBPE.py) — The Tokenizer Swap:** Keeps `SimpleTransformer.py`'s minimal code but replaces character-level tokens with a custom BPE tokenizer (vocab=4000). A context window of 32 BPE tokens covers ~20 words instead of ~5 characters — breaking the information ceiling with zero architectural changes.
 - **[TinyTransformer.py](TinyTransformer.py) — The Workhorse:** Our baseline for all experiments in BENCHMARKS.md. Adds mixed precision (float16) and a cosine learning rate schedule for faster, more stable training.
 - **[TinyTransformerClass.py](TinyTransformerClass.py) — The Cleanup:** Identical to the above, reorganized using Object-Oriented Programming (OOP) to match standard professional PyTorch style.
 
@@ -65,7 +66,7 @@ This project is designed to run on **Google Colab** using a free T4 GPU.
 - `numpy` — math
 - `cupy` — GPU math for the early models
 - `datasets` — Hugging Face library to stream TinyStories
-- `tokenizers` — Hugging Face library to train and run the BPE tokenizer (`TinyBPE.py`)
+- `tokenizers` — Hugging Face library to train and run the BPE tokenizer (`TinyBPE.py`, `SimpleBPE.py`)
 - `torch` — PyTorch, for building and training the neural networks
 
 *Note: [TorchMLP.py](TorchMLP.py) and [SimpleTransformer.py](SimpleTransformer.py) can run on CPU, but will be significantly slower.*
@@ -75,7 +76,7 @@ This project is designed to run on **Google Colab** using a free T4 GPU.
 ## 📖 The Datasets
 
 - **`names.txt`** — A list of real names from Andrej Karpathy's `makemore` project. Used to teach the AI how to spell names.
-- **TinyStories** — Simple, AI-generated children's stories from Hugging Face. Character-level models process this letter by letter; `TinyBPE.py` uses a custom BPE tokenizer trained on the same corpus.
+- **TinyStories** — Simple, AI-generated children's stories from Hugging Face. Character-level models process this letter by letter; `TinyBPE.py` and `SimpleBPE.py` use a custom BPE tokenizer trained on the same corpus.
 
 ---
 
