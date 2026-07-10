@@ -32,10 +32,11 @@ The training loop structure is also identical — random batch sampling, forward
 
 Compared with `TorchMLP.py`, `SimpleTransformer.py` makes these structural changes:
 
-- Increases context window from 4 to 8 (`context_size=8`) so the model can use more recent characters.
-- Replaces the MLP block with a transformer encoder (`2` layers, `4` heads).
+- Increases context window from 4 to 32 (`context_size=32`) so the model can use more recent characters (~5–6 words of context).
+- Replaces the MLP block with a transformer encoder (`3` layers, `4` heads).
 - Adds positional embeddings (`pos_embed`) so token order is represented explicitly.
 - Adds a `# --- Hyperparameters ---` block at the top, including `num_stories` and `temp` as named parameters, matching `TinyTransformer.py` style.
+- Uses 5000 stories (`num_stories=5000`) to prevent memorization and force genuine language learning.
 - Keeps all other code — optimizer, eval, generate — as close to `TorchMLP.py` as possible.
 
 ## Model architecture
@@ -48,7 +49,7 @@ pos_embed = nn.Embedding(context_size, embed_dim)
 ```
 
 - `tok_embed` maps each character ID to a 128-dim vector.
-- `pos_embed` gives each of the 8 positions in the context window its own learned vector.
+- `pos_embed` gives each of the 32 positions in the context window its own learned vector.
 - The input to the transformer is their sum:
 
 ```python
@@ -68,15 +69,15 @@ transformer = torch.compile(
 )
 ```
 
-- `embed_dim=128`, `n_heads=4`, `ffn_dim=256`, `n_layers=2`
+- `embed_dim=128`, `n_heads=4`, `ffn_dim=256`, `n_layers=3`
 
 **`batch_first=True`** — `nn.TransformerEncoderLayer` defaults to `batch_first=False`,
 expecting `(seq_len, batch, embed_dim)`. Our embeddings come out as
 `(batch_size, context_size, embed_dim)`, so this flag matches PyTorch's expectations
 to our natural data layout instead of requiring manual transposes. It can't be
 replaced by reordering arguments — it governs how tensor *axes* are interpreted,
-not call syntax. Skipping it wouldn't crash training (since `batch_size=1024` and
-`context_size=8` differ), it would silently scramble batch and sequence dimensions.
+not call syntax. Skipping it wouldn't crash training (since `batch_size=1536` and
+`context_size=32` differ), it would silently scramble batch and sequence dimensions.
 
 **`dropout=0.`** — the layer's real default is `0.1`, not `0`, so this is
 an active override. Omitting it would quietly reintroduce 10% dropout, making runs
@@ -112,26 +113,18 @@ for step in range(n_steps):
 
 The only difference from `TorchMLP.py` is the forward pass line — the embedding and model call — everything else is unchanged.
 
-Evaluation uses the full dataset (safe at `num_stories=200`):
+Evaluation uses a fixed-seed 4096-sample subset rather than the full dataset. With `num_stories=5000` and `context_size=32`, embedding the full dataset at eval time would require allocating ~62GB of GPU memory and cause an OOM crash. The fixed seed ensures the model is always evaluated on the exact same 4096 rows, eliminating accuracy wobble from random sampling:
 
 ```python
-x_eval = tok_embed(input_ids) + pos_embed(torch.arange(context_size))
-pred_ids = linear(transformer(x_eval)[:, -1, :]).argmax(1)
+eval_idx = torch.randint(0, len(input_ids), (4096,), generator=torch.Generator(device=input_ids.device).manual_seed(0))
+pred_ids = linear(transformer(tok_embed(input_ids[eval_idx]) + pos_embed(torch.arange(context_size)))[:, -1, :]).argmax(1)
 ```
-
-> **Note:** If increasing `num_stories` beyond ~200, switch to a 4096-sample subset to avoid GPU OOM:
-> ```python
-> eval_idx = torch.randint(0, len(input_ids), (4096,))
-> x_eval = tok_embed(input_ids[eval_idx]) + pos_embed(torch.arange(context_size))
-> pred_ids = linear(transformer(x_eval)[:, -1, :]).argmax(1)
-> # use target_ids[eval_idx] in accuracy calculation
-> ```
 
 ## Generation behavior
 
 Generation logic is the same as `TorchMLP.py` with two differences:
 
-1. Context length is 8 instead of 4.
+1. Context length is 32 instead of 4.
 2. The forward pass uses transformer + positional embeddings instead of MLP + `.view()`.
 
 ```python
@@ -142,7 +135,7 @@ def generate(num_chars=200, context_ids=list(token_ids[:context_size]), temp=tem
     next_token = torch.multinomial(next_token_probs, 1).item()
 ```
 
-Temperature `temp` (default `0.7`) sharpens the output distribution so high-confidence tokens are sampled more often, producing cleaner text without retraining.
+Temperature `temp` (default `0.5`) sharpens the output distribution so high-confidence tokens are sampled more often, producing cleaner text without retraining.
 
 ## How SimpleTransformer differs from TinyTransformer
 
@@ -151,17 +144,20 @@ Temperature `temp` (default `0.7`) sharpens the output distribution so high-conf
 | Feature | TinyTransformer.py | SimpleTransformer.py |
 |---|---|---|
 | Optimizer | AdamW (`betas=(0.9, 0.95)`, fused) | Adam (defaults) |
-| LR scheduler | CosineAnnealingLR | None (fixed `lr=1e-3`) |
+| LR | `2e-3` | `2e-3` |
+| LR scheduler | CosineAnnealingLR | None (fixed LR) |
 | Mixed precision | `torch.autocast` float16 | None |
-| `num_stories` | 5000 | 200 |
+| `num_stories` | 5000 | 5000 |
+| `context_size` | 32 | 32 |
+| `n_layers` | 3 | 3 |
 | `embed_dim` | 256 | 128 |
 | `ffn_dim` | 1024 | 256 |
-| `temp` | named hyperparameter (0.5) | named hyperparameter (0.7) |
-| Eval strategy | 4096-sample subset | Full dataset |
-| Final accuracy | ~67.7% | ~67.2% |
-| Training time | ~20.5s | ~35.6s |
+| `temp` | named hyperparameter (0.5) | named hyperparameter (0.5) |
+| Eval strategy | Fixed-seed 4096-sample subset | Fixed-seed 4096-sample subset |
+| Final accuracy | ~70.0% | ~66.6% |
+| Training time | ~127.7s | ~151.1s |
 
-The accuracy gap is small (~0.5%). The speed difference comes from full-dataset eval rather than the model itself.
+The accuracy gap (~3.4%) comes primarily from float16 mixed precision and AdamW with cosine LR — not from architecture differences. Both models now share the same data config and eval strategy.
 
 ## Short summary
 
