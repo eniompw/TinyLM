@@ -1,14 +1,23 @@
 # 🧪 AI Lab Notebook: Training Tiny Language Models
 
-This file tracks training experiments on character-level and BPE language models trained on the **TinyStories** dataset.
+This notebook traces a complete journey from a basic MLP to a BPE transformer — five models, five phases, and ~65 experiments, all trained on TinyStories in under 2 minutes on a free Colab T4 GPU.
 
-The baseline model is **TinyTransformer.py** — a 2-layer transformer with float16 precision, ReLU activation, learned positional embeddings, and a context size of 8 characters. All runs use a standard Google Colab T4 GPU.
+## 🗺️ The Journey at a Glance
 
-> **How to read this doc:** An **experiment** adds or upgrades something to see if the model improves. An **ablation** removes something to prove it was necessary. All tests change only one thing at a time.
+| Phase | Model | Key Idea | Best Result |
+| :--- | :--- | :--- | :--- |
+| 1 | `TorchMLP.py` | Feedforward baseline — no attention | 70.7% char-level |
+| 2–3 | `SimpleTransformer.py` → `TinyTransformer.py` | Add attention, Keller optimizations | 70.0% (genuine learning) |
+| 4 | `SimpleBPE.py` | Swap tokenizer only — minimal code | 44.4%† in 72.9s |
+| 5 | `TinyBPE.py` | Custom vocab, scaled data | 45.9%† in 140s |
 
-> **Just want the results?** Jump to [Model Leaderboard](#-the-leaderboard-model-comparison) and [Generated Samples](#-generated-samples-seeing-is-believing).
-> **Want to understand why?** Follow the five complexity-ordered phases, then read [The Memorization Trap](#️-the-memorization-trap).
-> **Reproducing a specific run?** Each Phase header lists the exact config and the single change made.
+*† BPE accuracy is not comparable to character-level accuracy. Judge it by the [Generated Samples](#-generated-samples-seeing-is-believing).*
+
+This notebook documents experiments across **five models** — from a pure MLP to a BPE transformer — each building on the last. Every model is trained on the [TinyStories](https://huggingface.co/datasets/roneneldan/TinyStories) dataset on a standard Google Colab T4 GPU, with techniques drawn from [Keller Jordan's modded-nanogpt speedrun](https://github.com/KellerJordan/modded-nanogpt) and tested at each stage.
+
+> **Just want the results?** → [Model Leaderboard](#-the-leaderboard-model-comparison) · [Generated Samples](#-generated-samples-seeing-is-believing)  
+> **Want to understand why?** → Follow the five complexity-ordered phases below, then read [The Memorization Trap](#️-the-memorization-trap).  
+> **Reproducing a run?** → Each Phase header lists the exact config and the single change made.
 
 ---
 
@@ -176,6 +185,8 @@ n_steps      = 8001
 ## 🔀 Phase 2: Transformer Baseline Comparison
 
 The MLP learning curve is now established in Phase 1. This comparison isolates the architectural transition: adding attention to the character-level baseline.
+
+*Control: `TinyTransformer.py` is a 2-layer transformer with float16 precision, ReLU activation, learned positional embeddings, and an 8-character context window.*
 
 | Model | Best Accuracy | Steps |
 | :--- | ---: | ---: |
