@@ -7,7 +7,7 @@ The baseline model is **TinyTransformer.py** — a 2-layer transformer with floa
 > **How to read this doc:** An **experiment** adds or upgrades something to see if the model improves. An **ablation** removes something to prove it was necessary. All tests change only one thing at a time.
 
 > **Just want the results?** Jump to [Model Leaderboard](#-the-leaderboard-model-comparison) and [Generated Samples](#-generated-samples-seeing-is-believing).
-> **Want to understand why?** Read Phases 1–4, then [The Memorization Trap](#️-the-memorization-trap).
+> **Want to understand why?** Follow the five complexity-ordered phases, then read [The Memorization Trap](#️-the-memorization-trap).
 > **Reproducing a specific run?** Each Phase header lists the exact config and the single change made.
 
 ---
@@ -16,16 +16,17 @@ The baseline model is **TinyTransformer.py** — a 2-layer transformer with floa
 
 - [🔬 Scientific Controls](#-scientific-controls)
 - [🧬 Model Lineage](#-model-lineage-from-mlp-digits-to-tinytransformer)
+- [🧠 Phase 1: TorchMLP Optimisation](#-phase-1-torchmlp-optimisation-adamw-context-capacity-data)
+- [🔀 Phase 2: Transformer Baseline Comparison](#-phase-2-transformer-baseline-comparison)
+- [🔧 Phase 3: Character-Level Transformer Experiments](#-phase-3-character-level-transformer-experiments)
+- [⚡ Phase 4: SimpleBPE Baseline and AMP](#-phase-4-simplebpe-baseline-and-amp)
+- [🚀 Phase 5: BPE Transformer Experiments](#-phase-5-bpe-transformer-experiments)
 - [🔧 Optimization Stack](#-the-optimization-stack-simpletransformer--tinytransformer)
 - [🔧 SimpleTransformer Baseline Tuning](#-simpletransformer-baseline-tuning-character-level)
 - [📊 Model Leaderboard](#-the-leaderboard-model-comparison)
 - [⚠️ The Memorization Trap](#️-the-memorization-trap)
 - [🔬 Ablation & Experiment Summary](#-ablation--experiment-summary)
 - [📈 Step-by-Step Accuracy Data](#-step-by-step-accuracy-data)
-- [⚡ SimpleBPE AMP Optimisation](#-simplebpe-amp-optimisation)
-- [🔬 Phase 12: TinyBPE Tuning (Steps, LR, Vocab)](#-phase-12-tinybpe-tuning-steps-lr-vocab)
-- [🚀 Phase 13: TinyBPE Scale-Up (10k Stories, Depth, Context)](#-phase-13-tinybpe-scale-up-10k-stories-depth-context)
-- [🧠 Phase 14: TorchMLP Optimisation](#-phase-14-torchmlp-optimisation-adamw-context-capacity-data)
 - [📝 Experiment & Ablation Details](#-experiment--ablation-details)
 - [📖 Generated Samples](#-generated-samples-seeing-is-believing)
 
@@ -43,7 +44,7 @@ In AI it's very easy to fool yourself. Three rules keep our experiments valid:
 >
 > *Note: This affects speed, not accuracy — a study of 65 runs across 6 GPU/TPU types found only ~0.05%–0.3% accuracy variance between runs (T4 stdev ≈ 0.05%).*
 
-> ⚠️ **Accuracy is not comparable across tokenizers.** A character-level model predicts 1 of 65 tokens; a BPE model predicts 1 of 50,257. From Phase 9 onwards, lower BPE accuracy does **not** mean a worse model. Always judge quality by the generated samples.
+> ⚠️ **Accuracy is not comparable across tokenizers.** A character-level model predicts 1 of 65 tokens; a BPE model predicts 1 of 50,257. From Phase 4 onwards, lower BPE accuracy does **not** mean a worse model. Always judge quality by the generated samples.
 
 ---
 
@@ -99,15 +100,112 @@ Everything else that's new — 2-layer encoder (4 heads, `ffn_dim=1024`), `torch
 
 ---
 
+## 🧠 Phase 1: TorchMLP Optimisation (AdamW, Context, Capacity, Data)
+
+*Goal: Start with `TorchMLP.py`, the pure feedforward ancestor of TinyTransformer, before introducing attention.*
+
+*Baseline: SGD lr=0.5, ctx=4, hidden=150, batch=1024, 200 stories, 2001 steps → 62.3%.*
+
+> ⚠️ **Eval method changed mid-phase.** Early runs used full-dataset eval. From `embed_dim=512` onward (OOM risk), eval switched to a fixed 4096-sample subset with `torch.Generator(device='cuda')`. Accuracy numbers before and after this boundary are not directly comparable.
+
+### Experiment Log
+
+| Experiment | Change | Acc | Time | s/200 steps | Verdict |
+| :--- | :--- | ---: | ---: | ---: | :--- |
+| Baseline (SGD, lr=0.5) | — | 62.3% | 4.1s | ~0.4s | Control |
+| AdamW, lr=1e-3 | optimizer swap | 62.3% | 4.8s | ~0.5s | ❌ No gain at baseline scale |
+| + stories=1000, ctx=8 | more data + context | 64.2% | 7.3s | ~0.7s | ✅ +1.9% |
+| + batch=2048, n_steps=3001 | larger batch + more steps | 66.1% | 11.0s | ~0.7s | ✅ +1.9% |
+| + hidden=512, n_steps=5001 | more capacity | 71.8% | 38.5s | ~1.3s | ✅ +5.7% — hidden was the bottleneck |
+| hidden=1024, n_steps=3001 | double hidden | 72.8% | 40.2s | ~2.5s | ⚠️ +1% but 2× slower/step |
+| hidden=512, n_steps=5001 (reconfirm) | sweet spot check | 71.8% | 38.5s | ~1.3s | ✅ 512 confirmed as optimal |
+| embed_dim=512 | wider embeddings | OOM | — | — | ❌ embed_dim is not the bottleneck |
+| ctx=16, hidden=512, n_steps=5001 | wider context | 75.5% | 38.7s | ~1.3s | ✅ +3.7% — context is king |
+| ctx=32, hidden=512, n_steps=5001 | double context | 75.6% | 84.0s | ~3.3s | ❌ Same acc, 2.2× slower |
+| ctx=16, hidden=512, n_steps=8001 | find plateau | **77.9%** ⭐ | 66.7s | ~1.6s | ✅ Peak at step 7800 — memorizing |
+| ctx=16, hidden=512, stories=5000, n_steps=8001 | break memorization | 70.7% | 66.9s | ~1.6s | ✅ Genuinely learning |
+
+### Step-by-Step Data
+
+#### ctx=16, hidden=512, stories=1000, n_steps=8001 (Peak Raw Score)
+
+| Step | Loss | Acc | Time |
+| ---: | ---: | ---: | ---: |
+| 0 | 4.1329 | 19.3% | 0.0s |
+| 2000 | 0.9618 | 71.6% | 16.5s |
+| 4000 | 0.7999 | 74.8% | 33.4s |
+| 6000 | 0.7741 | 76.2% | 50.2s |
+| 7800 | 0.7128 | **77.9%** ⭐ | 65.0s |
+| 8000 | 0.7648 | 77.3% | 66.7s |
+
+#### ctx=16, hidden=512, stories=5000, n_steps=8001 (Genuine Learning)
+
+| Step | Loss | Acc | Time |
+| ---: | ---: | ---: | ---: |
+| 0 | 4.2901 | 19.0% | 0.0s |
+| 2000 | 1.0472 | 67.7% | 16.7s |
+| 5000 | 0.9608 | 69.7% | 42.0s |
+| 8000 | 0.9333 | 70.4% | 66.9s |
+
+### Key Findings
+
+> 💡 **`hidden_dim` was the biggest single lever (+5.7%).** The original `hidden=150` was severely undersized — the MLP input is `context_size × embed_dim` features wide, so the hidden layer was a dramatic bottleneck. Doubling to `hidden=512` unlocked the capacity. `hidden=1024` gave only +1% more but cost 2× per step.
+
+> 💡 **`context_size=16` beats `context_size=32` for the MLP.** Transformer attention scales efficiently with context; the MLP input layer size is `context_size × embed_dim`, so doubling context doubles the first linear layer. ctx=32 matched ctx=16's accuracy but took 2.2× longer per step — not worth it.
+
+> 💡 **The memorization trap hits the MLP exactly as hard as the transformer.** On 1k stories the MLP peaks at 77.9% then wobbles. On 5k stories it plateaues at 70.4% with a smooth, stable curve.
+
+> 💡 **Pure MLP matches the transformer at the same data/context scale.** Both architectures hit ~70% on 5k stories with ctx≈16–32. Attention adds no measurable advantage once the dataset is large enough to prevent memorization — at this tiny scale, the information bottleneck dominates everything.
+
+### Canonical `TorchMLP.py` Config
+
+```python
+num_stories  = 5000
+context_size = 16
+embed_dim    = 256
+hidden_dim   = 512
+batch_size   = 2048
+lr           = 1e-3
+n_steps      = 8001
+# eval: fixed 4096-sample subset, torch.Generator(device='cuda')
+```
+**Result: 70.7% in 66.9s** — 8.4 percentage points above the original 62.3% baseline, using a pure two-linear-layer MLP with no attention.
+
+---
+
+## 🔀 Phase 2: Transformer Baseline Comparison
+
+The MLP learning curve is now established in Phase 1. This comparison isolates the architectural transition: adding attention to the character-level baseline.
+
+| Model | Best Accuracy | Steps |
+| :--- | ---: | ---: |
+| TinyMLP.py | 59.4% | 2000 |
+| TorchMLP.py | 62.4% | 2000 |
+| SimpleTransformer.py | 67.2% | 2000 |
+| TinyTransformer.py (2 layers) | 68.4% | 2000 |
+
+### First Transformer Learning Curves
+*Goal: Does a basic transformer beat the character-level `SimpleTransformer.py` baseline?*
+
+| Step | SimpleTrans | **2L (Baseline)** |
+| ---: | ---: | ---: |
+| 0 | 4.0% | 19.3% |
+| 200 | 53.5% | 54.8% |
+| 800 | 62.4% | 63.2% |
+| 1600 | 66.2% | 67.0% |
+| 2000 | **67.2%** ⭐ | 67.4% |
+
+---
+
 ## 🔧 The Optimization Stack: SimpleTransformer → TinyTransformer
 
 `TinyTransformer.py`'s canonical config adds five optimizations absent from `SimpleTransformer.py`. Each costs 1–2 lines of code:
 
 | Component | `SimpleTransformer.py` | `TinyTransformer.py` | Accuracy Impact | Speed Impact | Proven By |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`torch.compile`** | ✅ Present | ✅ Same | Neutral | ~1.2× faster (after ~32s one-time compile tax) | Phase 8: Cold vs Warm ablation |
+| **`torch.compile`** | ✅ Present | ✅ Same | Neutral | ~1.2× faster (after ~32s one-time compile tax) | Phase 3.7: Cold vs Warm ablation |
 | **float16 autocast** | ❌ float32 | ✅ `torch.autocast` on forward + eval | Neutral | Major — halves memory bandwidth; enables batch=1536 + ctx=32 in <2 min | bfloat16 ablation: 4.2× slower for +0.2% |
-| **`CosineAnnealingLR`** | ❌ Flat LR | ✅ `CosineAnnealingLR(T_max=n_steps, eta_min=1e-4)` | Smooths final convergence | Negligible | Phase 5: warmup on top gained only +0.6% |
+| **`CosineAnnealingLR`** | ❌ Flat LR | ✅ `CosineAnnealingLR(T_max=n_steps, eta_min=1e-4)` | Smooths final convergence | Negligible | Phase 3.4: warmup on top gained only +0.6% |
 | **AdamW** | ❌ `Adam(params, lr)` | ✅ `AdamW(..., betas=(0.9, 0.95), weight_decay=0.01, fused=True)` | Neutral; `weight_decay` stops repetitive output | `fused=True` speeds up GPU optimizer kernel | Experiment #9: `weight_decay` acts as grammar regularizer |
 | **Fixed `eval_rng`** | ❌ Full dataset eval | ✅ Dedicated `eval_rng`, 4096-sample subset | Eliminates accuracy wobble | Faster per-eval | Scientific Controls section |
 | **Inference temperature** | 0.7 (hardcoded) | 0.5 (parameterized) | N/A | N/A | Eliminates invented words ("throbe" → "robe") |
@@ -116,7 +214,11 @@ Everything else that's new — 2-layer encoder (4 heads, `ffn_dim=1024`), `torch
 
 ---
 
-## 🔧 SimpleTransformer Baseline Tuning (Character-Level)
+## 🔧 Phase 3: Character-Level Transformer Experiments
+
+This phase introduces attention while retaining character tokens. It starts with the minimal `SimpleTransformer.py` baseline, then scales up through the detailed TinyTransformer experiments below.
+
+### SimpleTransformer Baseline Tuning (Character-Level)
 
 *Goal: Squeeze maximum accuracy from `SimpleTransformer.py` within a 2-minute Colab budget, changing only hyperparameters — zero new lines of code.*
 
@@ -140,7 +242,11 @@ Everything else that's new — 2-layer encoder (4 heads, `ffn_dim=1024`), `torch
 
 ---
 
-## 🔧 SimpleBPE.py — Minimal BPE Baseline
+## ⚡ Phase 4: SimpleBPE Baseline and AMP
+
+This phase keeps the minimal transformer style, but introduces subword BPE tokenization and mixed-precision training.
+
+### SimpleBPE.py — Minimal BPE Baseline
 
 *Goal: Prove the tokenizer swap alone (character → BPE) improves text quality, using `SimpleTransformer.py`'s minimal code style with zero architectural changes.*
 
@@ -182,7 +288,7 @@ Everything else that's new — 2-layer encoder (4 heads, `ffn_dim=1024`), `torch
 
 ---
 
-## ⚡ SimpleBPE AMP Optimisation
+### AMP Optimisation
 
 *Goal: Test whether float16 mixed precision makes SimpleBPE faster within its minimal-code philosophy.*
 
@@ -333,8 +439,8 @@ All tests below are single changes made to the 2-layer TinyTransformer baseline 
 | **Exp** | **Context Size:** 16 → 32 (large dataset) | −1.6% | ~1.3× slower | ✅ Fixes 90% of pronoun swaps. The best 2-min tradeoff |
 | **Exp** | **batch=2048 on 5k stories** (ctx=32) | +0.5% vs 1536 | 1.5× slower | ❌ Same ~70% ceiling — batch stops helping when genuinely learning |
 | **Exp** | **Inference Temp:** 0.7 → 0.5 | N/A | N/A | ✅ Eliminates invented words (e.g., "throbe" → "robe") |
-| **Exp** | **BPE Tokenization** (tiktoken gpt2, vocab=50257) | See Phase 9 | ~5.3× slower | ✅ **Breaks the 70% character ceiling** — full paragraphs & dialogue |
-| **Exp** | **BPE + Larger Batch** (batch=2048, 1401 steps) | −0.9% vs Phase 9 | ~1.05× faster/step | ✅ Reaches ~50% in fewer steps. Best short-budget BPE variant |
+| **Exp** | **BPE Tokenization** (tiktoken gpt2, vocab=50257) | See Phase 5.1 | ~5.3× slower | ✅ **Breaks the 70% character ceiling** — full paragraphs & dialogue |
+| **Exp** | **BPE + Larger Batch** (batch=2048, 1401 steps) | −0.9% vs Phase 5.1 | ~1.05× faster/step | ✅ Reaches ~50% in fewer steps. Best short-budget BPE variant |
 | **Exp** | **BPE + Weight Tying** | N/A | Neutral | ❌ Loss=254 at step 0 — init instability at vocab=50k. Reverted |
 | **Exp** | **Custom BPE** (vocab=4000, trained on TinyStories) | −3.8% vs tiktoken BPE | **~2× faster** | ✅ 4.43M params (vs 28M), fits in 103.6s. Best size/speed tradeoff |
 | **Exp** | **Logit Softcapping** (±15, Gemma 2 style) | Neutral | Negligible | ✅ Stable training, no NaN issues |
@@ -350,20 +456,7 @@ All tests below are single changes made to the 2-layer TinyTransformer baseline 
 
 ---
 
-### Phase 1: Baseline Comparison (MLP vs Transformer)
-*Goal: Does a basic Transformer beat the older, simpler models?*
-
-| Step | NameSLP | TinyMLP | SimpleTrans | **2L (Baseline)** |
-| ---: | ---: | ---: | ---: | ---: |
-| 0 | 3.5% | 4.7% | 4.0% | 19.3% |
-| 200 | 37.1% | 44.8% | 53.5% | 54.8% |
-| 800 | 38.9% | 55.0% | 62.4% | 63.2% |
-| 1600 | 39.5% | 58.3% | 66.2% | 67.0% |
-| 2000 | **39.6%** ⭐ | **59.4%** ⭐ | **67.2%** ⭐ | 67.4% |
-
----
-
-### Phase 2: Shape & Size Experiments
+### Phase 3.1: Shape & Size Experiments
 *Goal: Does adding layers, widening the model, or changing its shape beat the 2L Baseline?*
 
 | Step | **3L** (Run 1) | **4L** | ND 4L (128d) | Eff. Deep 4L | Bal. ND 4L (192d) | Wider FFN 3L |
@@ -379,7 +472,7 @@ All tests below are single changes made to the 2-layer TinyTransformer baseline 
 
 ---
 
-### Phase 3: Batch Size & Learning Rate
+### Phase 3.2: Batch Size & Learning Rate
 *Goal: Instead of changing the model's shape, what if we change HOW it learns? (3-layer model)*
 
 | Step | High LR (batch=1024) | Mid Ground (batch=1536) | **Large Batch+LR** (batch=2048) |
@@ -392,7 +485,7 @@ All tests below are single changes made to the 2-layer TinyTransformer baseline 
 
 ---
 
-### Phase 4: The Real Intelligence Push (Dataset & Context)
+### Phase 3.3: The Real Intelligence Push (Dataset & Context)
 *Goal: Stop chasing raw accuracy. Expand the dataset and context window to force the model to learn English rather than memorize 1,000 stories.*
 
 | Step | **3L, 2048 batch, 3k stories** (ctx=8) | **3L, 1536 batch, 5k stories** (ctx=32, wd=0.01) |
@@ -403,14 +496,14 @@ All tests below are single changes made to the 2-layer TinyTransformer baseline 
 | 1600 | 69.3% | **70.0%** ⭐ |
 | 2000 | 71.4% | - |
 
-> 💡 Scores here are *lower* than Phase 3's 76.1%, but the generated text is dramatically better. See [The Memorization Trap](#️-the-memorization-trap).
+> 💡 Scores here are *lower* than Phase 3.2's 76.1%, but the generated text is dramatically better. See [The Memorization Trap](#️-the-memorization-trap).
 
 ---
 
-### Phase 5: Optimizer Stability (Warmup & Gradient Clipping)
+### Phase 3.4: Optimizer Stability (Warmup & Gradient Clipping)
 *Goal: Do standard stability techniques help enough at this scale to justify the extra code?*
 
-*Changes added to Phase 4 canonical config (3L, ctx=32, 5k stories, batch=1536): 50-step linear LR warmup + `clip_grad_norm_(params, 1.0)`.*
+*Changes added to the Phase 3.3 canonical config (3L, ctx=32, 5k stories, batch=1536): 50-step linear LR warmup + `clip_grad_norm_(params, 1.0)`.*
 
 | Step | Loss | Acc | LR |
 | ---: | ---: | ---: | ---: |
@@ -423,20 +516,20 @@ All tests below are single changes made to the 2-layer TinyTransformer baseline 
 
 **Training time: 133.6s**
 
-### Phase 5 Verdict
+### Phase 3.4 Verdict
 
 | Technique | Peak Acc | Time | vs Baseline (70.0% / 127.7s) | Keep? |
 |:---|---:|---:|:---|:---|
 | Warmup (50 steps) + Grad Clipping | 70.7% | 133.6s | +0.7%, +5.9s, more code | ⚠️ Marginal |
 
-> 💡 Valid techniques, but marginal at this scale. The simpler no-warmup baseline (Phase 4) reached 70.0% faster with less code.
+> 💡 Valid techniques, but marginal at this scale. The simpler no-warmup baseline (Phase 3.3) reached 70.0% faster with less code.
 
 ---
 
-### Phase 6: Larger Batch on Big Dataset
-*Goal: Phase 3 showed batch=2048 was a huge win on 1k stories. Does it still work on 5k stories and ctx=32?*
+### Phase 3.5: Larger Batch on Big Dataset
+*Goal: Phase 3.2 showed batch=2048 was a huge win on 1k stories. Does it still work on 5k stories and ctx=32?*
 
-*Single change from Phase 4 canonical config:* `batch_size 1536 → 2048`
+*Single change from the Phase 3.3 canonical config:* `batch_size 1536 → 2048`
 
 | Step | Loss | Acc | Time |
 | ---: | ---: | ---: | ---: |
@@ -453,10 +546,10 @@ All tests below are single changes made to the 2-layer TinyTransformer baseline 
 
 ---
 
-### Phase 7: Attempting to Break the 70% Wall
+### Phase 3.6: Attempting to Break the 70% Wall
 *Goal: Three different approaches — bigger batch, more attention heads, wider model — all tried to break the ~70% ceiling.*
 
-#### 7a. More Attention Heads (4 → 8)
+#### 3.6a. More Attention Heads (4 → 8)
 *Single change from canonical:* `n_heads 4 → 8`
 
 | Step | Loss | Acc | Time |
@@ -468,7 +561,7 @@ All tests below are single changes made to the 2-layer TinyTransformer baseline 
 
 **Training time: 182.8s**
 
-#### 7b. Wider Model (embed_dim 256 → 320)
+#### 3.6b. Wider Model (embed_dim 256 → 320)
 *Single change:* `embed_dim 256 → 320` (3.26M params, +35%). Required `lr=1e-3` + grad clipping to prevent NaN divergence.
 
 | Step | Loss | Acc | Time |
@@ -481,7 +574,7 @@ All tests below are single changes made to the 2-layer TinyTransformer baseline 
 
 **Training time: 218.0s**
 
-### Phase 7 Verdict
+### Phase 3.6 Verdict
 
 > 💡 **The Definitive Result:** Three completely different approaches — bigger batch (+33% data/step), more heads (+100% attention patterns), wider model (+35% parameters) — all converged on **exactly 70.5%**. This is the **information ceiling** of character-level tokenization at ctx=32 (~5–6 words). No amount of model capacity can extract more signal than exists in a 5-word window.
 
@@ -489,8 +582,8 @@ All tests below are single changes made to the 2-layer TinyTransformer baseline 
 
 ---
 
-### Phase 8: `torch.compile` — Cold vs Warm Start
-*Goal: Measure exactly how much `torch.compile` graph compilation costs, using the Phase 4 canonical config (3L, ctx=32, 5k stories, batch=1536). `params: 2,414,408`.*
+### Phase 3.7: `torch.compile` — Cold vs Warm Start
+*Goal: Measure exactly how much `torch.compile` graph compilation costs, using the Phase 3.3 canonical config (3L, ctx=32, 5k stories, batch=1536). `params: 2,414,408`.*
 
 **Cold Start** (compilation happens inside the timed run):
 
@@ -524,12 +617,16 @@ All tests below are single changes made to the 2-layer TinyTransformer baseline 
 
 ---
 
-### Phase 9: BPE Tokenization — Breaking the Character Ceiling
-*Goal: All Phase 7 experiments proved the ~70% ceiling is an **information bottleneck** from character-level tokenization, not a capacity problem. The fix: swap to subword BPE tokens so ctx=32 covers ~20–25 words instead of ~5–6.*
+## 🚀 Phase 5: BPE Transformer Experiments
 
-*Single change from Phase 4 canonical config:* Replace character tokenizer with `tiktoken` GPT-2 BPE (`vocab_size=50,257`). Architecture and all hyperparameters unchanged. `params: 28,159,313` (dominated by the embedding table: 50257×256 = 12.9M, plus output head: 12.9M).
+These experiments build on Phase 4 by scaling BPE models from a GPT-2 tokenizer to a custom TinyStories vocabulary.
 
-> ⚠️ **Accuracy is not comparable to earlier phases.** The model now predicts 1 of 50,257 tokens instead of 1 of 65 characters. A "50.9%" here is a much harder task than "70.0%" in Phase 4. Judge quality by the generated sample.
+### Phase 5.1: BPE Tokenization — Breaking the Character Ceiling
+*Goal: The Phase 3.6 experiments proved the ~70% ceiling is an **information bottleneck** from character-level tokenization, not a capacity problem. The fix: swap to subword BPE tokens so ctx=32 covers ~20–25 words instead of ~5–6.*
+
+*Single change from the Phase 3.3 canonical config:* Replace character tokenizer with `tiktoken` GPT-2 BPE (`vocab_size=50,257`). Architecture and all hyperparameters unchanged. `params: 28,159,313` (dominated by the embedding table: 50257×256 = 12.9M, plus output head: 12.9M).
+
+> ⚠️ **Accuracy is not comparable to earlier phases.** The model now predicts 1 of 50,257 tokens instead of 1 of 65 characters. A "50.9%" here is a much harder task than "70.0%" in Phase 3.3. Judge quality by the generated sample.
 
 | Step | Loss | Acc | Time |
 | ---: | ---: | ---: | ---: |
@@ -544,14 +641,14 @@ All tests below are single changes made to the 2-layer TinyTransformer baseline 
 
 > 💡 **The ceiling is broken.** The loss curve shows no plateau at step 1800, unlike every character-level run which flattened by step 1600. ctx=32 BPE tokens ≈ 100+ characters — roughly 20–25 words. The model can now track subject–verb agreement, character names, and dialogue turns.
 
-> 💡 **Why 28M params?** The transformer itself is the same ~2.4M as Phase 4. The extra 26M comes entirely from embedding tables. Weight tying (`linear.weight = tok_embed.weight`) would halve this to ~15M — a natural next experiment.
+> 💡 **Why 28M params?** The transformer itself is the same ~2.4M as Phase 3.3. The extra 26M comes entirely from embedding tables. Weight tying (`linear.weight = tok_embed.weight`) would halve this to ~15M — a natural next experiment.
 
 ---
 
-### Phase 10: BPE Short-Budget Run & Weight-Tying Ablation
+### Phase 5.2: BPE Short-Budget Run & Weight-Tying Ablation
 *Goal: Fit the BPE model closer to a 2-minute Colab budget.*
 
-*Single changes from Phase 9:* `batch_size 1536 → 2048`, `n_steps 1801 → 1401`. `params: 28,159,313`.
+*Single changes from Phase 5.1:* `batch_size 1536 → 2048`, `n_steps 1801 → 1401`. `params: 28,159,313`.
 
 | Step | Loss | Acc | Time |
 | ---: | ---: | ---: | ---: |
@@ -567,7 +664,7 @@ All tests below are single changes made to the 2-layer TinyTransformer baseline 
 
 ---
 
-### Phase 11: Custom Small-Vocab BPE (2-Minute Champion)
+### Phase 5.3: Custom Small-Vocab BPE (2-Minute Champion)
 *Goal: GPT-2's 50,257-token vocab is oversized for TinyStories. Train a custom BPE tokenizer on the TinyStories corpus with a much smaller vocab, cutting embedding-table size dramatically.*
 
 *Config:* `3L, ctx=32 custom-BPE tokens, 5k stories, batch=2048, n_steps=901, lr=2e-3, cosine LR, logit softcapping (±15), warm-compiled`. Tokenizer: HuggingFace BPE trained from scratch, `vocab_size=4000`. `params: 4,429,472` (84% reduction vs GPT-2 BPE).
@@ -589,13 +686,13 @@ All tests below are single changes made to the 2-layer TinyTransformer baseline 
 
 ---
 
-## 🔬 Phase 12: TinyBPE Tuning (Steps, LR, Vocab)
+### Phase 5.4: TinyBPE Tuning (Steps, LR, Vocab)
 
-*Goal: Three single-variable experiments on the Phase 11 canonical config to find the optimal 2-minute TinyBPE config.*
+*Goal: Three single-variable experiments on the Phase 5.3 canonical config to find the optimal 2-minute TinyBPE config.*
 
-*Baseline (Phase 11):* `46.2% at step 900, 103.6s`
+*Baseline (Phase 5.3):* `46.2% at step 900, 103.6s`
 
-### 12a. More Steps (901 → 1201)
+#### 5.4a. More Steps (901 → 1201)
 
 | Step | Loss | Acc | Time |
 | ---: | ---: | ---: | ---: |
@@ -607,7 +704,7 @@ All tests below are single changes made to the 2-layer TinyTransformer baseline 
 
 > 💡 **Still climbing at step 901.** More steps is the only lever that meaningfully moves accuracy. Since 1201 steps overshoots the 2-minute wall, the optimal within-budget config is `n_steps=1001` (~116s).
 
-### 12b. Slower LR Tail (eta_min 1e-4 → 3e-4)
+#### 5.4b. Slower LR Tail (eta_min 1e-4 → 3e-4)
 
 | Step | Loss | Acc | Time |
 | ---: | ---: | ---: | ---: |
@@ -615,7 +712,7 @@ All tests below are single changes made to the 2-layer TinyTransformer baseline 
 
 > 💡 **No effect** (+0.1% — within noise). The cosine tail difference is only ~0.2e-3 LR at step 900, too small to influence learning at this budget.
 
-### 12c. Larger Vocab (4000 → 6000 tokens)
+#### 5.4c. Larger Vocab (4000 → 6000 tokens)
 
 | Step | Loss | Acc | Time |
 | ---: | ---: | ---: | ---: |
@@ -623,26 +720,26 @@ All tests below are single changes made to the 2-layer TinyTransformer baseline 
 
 > 💡 **Marginal loss (−0.6%).** The larger vocab adds 1M params but the model doesn't have enough steps to learn the extra tokens at this budget. Generated text quality was subjectively better — richer tokenisation needs more steps to pay off.
 
-### ✅ Phase 12 Verdict
+#### ✅ Phase 5.4 Verdict
 
 | Experiment | Change | Acc | Time | Verdict |
 | :--- | :--- | ---: | ---: | :--- |
-| Phase 11 baseline | — | 46.2% | 103.6s | Control |
-| **12a. More steps** | 901 → 1201 | **48.1%** | 139.3s | ⚠️ Over budget — sets `n_steps=1001` as new optimal |
-| 12b. Slower LR tail | eta_min → 3e-4 | 46.3% | 104.3s | ❌ Noise |
-| 12c. Larger vocab | 4000 → 6000 | 45.6% | 105.8s | ❌ Needs more steps |
+| Phase 5.3 baseline | — | 46.2% | 103.6s | Control |
+| **5.4a. More steps** | 901 → 1201 | **48.1%** | 139.3s | ⚠️ Over budget — sets `n_steps=1001` as new optimal |
+| 5.4b. Slower LR tail | eta_min → 3e-4 | 46.3% | 104.3s | ❌ Noise |
+| 5.4c. Larger vocab | 4000 → 6000 | 45.6% | 105.8s | ❌ Needs more steps |
 
 **New canonical `TinyBPE.py` config:** `vocab=4000, n_steps=1001, eta_min=1e-4` → Expected accuracy: **~47% at ~116s**.
 
-> ⚠️ **Superseded by Phase 13.** The canonical config was updated in Phase 13 to use `num_stories=10000, n_steps=1201`. See [Phase 13 Verdict](#-phase-13-verdict) for the current default.
+> ⚠️ **Superseded by Phase 5.5.** The canonical config was updated in Phase 5.5 to use `num_stories=10000, n_steps=1201`. See [Phase 5.5 Verdict](#-phase-55-verdict) for the current default.
 
 ---
 
-## 🚀 Phase 13: TinyBPE Scale-Up (10k Stories, Depth, Context)
+### Phase 5.5: TinyBPE Scale-Up (10k Stories, Depth, Context)
 
 *Baseline: TinyBPE canonical config (3L, custom BPE vocab=4000, 5k stories, batch=2048, n_steps=1001, ~116s) → 46.8%†*
 
-### 13a. More Data (5k → 10k stories)
+#### 5.5a. More Data (5k → 10k stories)
 *Single change:* `num_stories 5000 → 10000`
 
 | Step | Loss | Acc | Time |
@@ -652,8 +749,8 @@ All tests below are single changes made to the 2-layer TinyTransformer baseline 
 
 > 💡 **Raw accuracy dropped ~2%** — identical pattern to the 1k→5k char-level transition. See [The Memorization Trap](#️-the-memorization-trap). Generated text shows genuine improvement: multi-character interactions, subordinate clauses with motives, and resolved story arcs.
 
-### 13b. More Steps on 10k (1001 → 1201)
-*Single change from 13a:* `n_steps 1001 → 1201`
+#### 5.5b. More Steps on 10k (1001 → 1201)
+*Single change from 5.5a:* `n_steps 1001 → 1201`
 
 | Step | Loss | Acc | Time |
 | ---: | ---: | ---: | ---: |
@@ -662,13 +759,13 @@ All tests below are single changes made to the 2-layer TinyTransformer baseline 
 
 **Training time: 139.8s** *(new best for 10k config)*
 
-### 13c. Slower LR Tail on 10k (eta_min 1e-4 → 3e-4)
-**Peak: 45.7% at step 1200, 139.6s — no effect (−0.2% vs 13b, within noise)**
+#### 5.5c. Slower LR Tail on 10k (eta_min 1e-4 → 3e-4)
+**Peak: 45.7% at step 1200, 139.6s — no effect (−0.2% vs 5.5b, within noise)**
 
 > 💡 The tail oscillation is **batch sampling variance**, not LR decay. With batch=2048 from 10k stories, each batch covers ~20% of the dataset — late-training loss bounces are inherent stochasticity. ❌ Don't bother.
 
-### 13d. Deeper Model (3 → 4 layers, n_steps=801)
-*Single change from 13b:* `n_layers 3 → 4, n_steps 1201 → 801`
+#### 5.5d. Deeper Model (3 → 4 layers, n_steps=801)
+*Single change from 5.5b:* `n_layers 3 → 4, n_steps 1201 → 801`
 
 | Step | Loss | Acc | Time |
 | ---: | ---: | ---: | ---: |
@@ -677,8 +774,8 @@ All tests below are single changes made to the 2-layer TinyTransformer baseline 
 
 > 💡 **4L/801 steps (44.3%) does not beat 3L/1201 steps (45.9%) within the 2-minute budget.** 4L needs ~1100 steps to reach its peak but that costs 241s. Within 2 minutes, **3L is optimal.**
 
-### 13e. Longer Context (ctx 32 → 64 BPE tokens, n_steps=401)
-*Single change from 13b:* `context_size 32 → 64, n_steps 1201 → 401`
+#### 5.5e. Longer Context (ctx 32 → 64 BPE tokens, n_steps=401)
+*Single change from 5.5b:* `context_size 32 → 64, n_steps 1201 → 401`
 
 | Step | Loss | Acc | Time |
 | ---: | ---: | ---: | ---: |
@@ -687,8 +784,8 @@ All tests below are single changes made to the 2-layer TinyTransformer baseline 
 
 > 💡 **Lower accuracy, higher story quality.** ctx=64 BPE ≈ 40–50 words — enough for story-level conclusions and scene-setting. But ~30s/100 steps means only ~400 steps fit in 2 minutes — not enough to converge. Best framed as a "what if you had 5 minutes" variant.
 
-### 13f. Larger Vocab on 10k (vocab 4000 → 6000, n_steps=1201)
-*Single change from 13b:* `vocab_size 4000 → 6000` → `params: 5,455,472`
+#### 5.5f. Larger Vocab on 10k (vocab 4000 → 6000, n_steps=1201)
+*Single change from 5.5b:* `vocab_size 4000 → 6000` → `params: 5,455,472`
 
 | Step | Loss | Acc | Time |
 | ---: | ---: | ---: | ---: |
@@ -698,93 +795,20 @@ All tests below are single changes made to the 2-layer TinyTransformer baseline 
 
 > 💡 **vocab=6000 underperforms vocab=4000** (45.0% vs 45.9%) and takes 35% more time (188s vs 140s). The larger vocab needs ~1600+ steps to beat vocab=4000, which costs ~250s — not budget-viable.
 
-### ✅ Phase 13 Verdict
+#### ✅ Phase 5.5 Verdict
 
 | Experiment | Change | Acc | Time | Verdict |
 | :--- | :--- | ---: | ---: | :--- |
-| 13a. More data | 5k → 10k stories | 44.8% | 117s | ✅ Better quality, lower raw score |
-| **13b. More steps** | 1001 → 1201 | **45.9%** ⭐ | 140s | ✅ New best — sets new canonical |
-| 13c. Slower LR tail | eta_min → 3e-4 | 45.7% | 140s | ❌ Sampling variance, not LR |
-| 13d. 4 layers | n_layers=4, 801 steps | 44.3% | 124s | ❌ Needs 241s to beat 3L |
-| 13e. ctx=64 | context_size 32→64 | 37.7% | 121s | ⚠️ Better quality, too slow for full run |
-| 13f. Larger vocab | vocab 4000→6000 | 45.0% | 189s | ❌ Needs 250s to converge |
+| 5.5a. More data | 5k → 10k stories | 44.8% | 117s | ✅ Better quality, lower raw score |
+| **5.5b. More steps** | 1001 → 1201 | **45.9%** ⭐ | 140s | ✅ New best — sets new canonical |
+| 5.5c. Slower LR tail | eta_min → 3e-4 | 45.7% | 140s | ❌ Sampling variance, not LR |
+| 5.5d. 4 layers | n_layers=4, 801 steps | 44.3% | 124s | ❌ Needs 241s to beat 3L |
+| 5.5e. ctx=64 | context_size 32→64 | 37.7% | 121s | ⚠️ Better quality, too slow for full run |
+| 5.5f. Larger vocab | vocab 4000→6000 | 45.0% | 189s | ❌ Needs 250s to converge |
 
 **New canonical `TinyBPE.py` config:** `vocab=4000, num_stories=10000, n_steps=1201, eta_min=1e-4` → Expected accuracy: **~45.9%† at ~140s**.
 
 *† Not comparable to character-level rows — BPE predicts 1 of 4,000 tokens vs 1 of 65 characters.*
-
----
-
-## 🧠 Phase 14: TorchMLP Optimisation (AdamW, Context, Capacity, Data)
-
-*Goal: Systematically optimise `TorchMLP.py` — the pure MLP ancestor of TinyTransformer.*
-
-*Baseline: SGD lr=0.5, ctx=4, hidden=150, batch=1024, 200 stories, 2001 steps → 62.3%.*
-
-> ⚠️ **Eval method changed mid-phase.** Early runs used full-dataset eval. From `embed_dim=512` onward (OOM risk), eval switched to a fixed 4096-sample subset with `torch.Generator(device='cuda')`. Accuracy numbers before and after this boundary are not directly comparable.
-
-### Experiment Log
-
-| Experiment | Change | Acc | Time | s/200 steps | Verdict |
-| :--- | :--- | ---: | ---: | ---: | :--- |
-| Baseline (SGD, lr=0.5) | — | 62.3% | 4.1s | ~0.4s | Control |
-| AdamW, lr=1e-3 | optimizer swap | 62.3% | 4.8s | ~0.5s | ❌ No gain at baseline scale |
-| + stories=1000, ctx=8 | more data + context | 64.2% | 7.3s | ~0.7s | ✅ +1.9% |
-| + batch=2048, n_steps=3001 | larger batch + more steps | 66.1% | 11.0s | ~0.7s | ✅ +1.9% |
-| + hidden=512, n_steps=5001 | more capacity | 71.8% | 38.5s | ~1.3s | ✅ +5.7% — hidden was the bottleneck |
-| hidden=1024, n_steps=3001 | double hidden | 72.8% | 40.2s | ~2.5s | ⚠️ +1% but 2× slower/step |
-| hidden=512, n_steps=5001 (reconfirm) | sweet spot check | 71.8% | 38.5s | ~1.3s | ✅ 512 confirmed as optimal |
-| embed_dim=512 | wider embeddings | OOM | — | — | ❌ embed_dim is not the bottleneck |
-| ctx=16, hidden=512, n_steps=5001 | wider context | 75.5% | 38.7s | ~1.3s | ✅ +3.7% — context is king |
-| ctx=32, hidden=512, n_steps=5001 | double context | 75.6% | 84.0s | ~3.3s | ❌ Same acc, 2.2× slower |
-| ctx=16, hidden=512, n_steps=8001 | find plateau | **77.9%** ⭐ | 66.7s | ~1.6s | ✅ Peak at step 7800 — memorizing |
-| ctx=16, hidden=512, stories=5000, n_steps=8001 | break memorization | 70.7% | 66.9s | ~1.6s | ✅ Genuinely learning |
-
-### Step-by-Step Data
-
-#### ctx=16, hidden=512, stories=1000, n_steps=8001 (Peak Raw Score)
-
-| Step | Loss | Acc | Time |
-| ---: | ---: | ---: | ---: |
-| 0 | 4.1329 | 19.3% | 0.0s |
-| 2000 | 0.9618 | 71.6% | 16.5s |
-| 4000 | 0.7999 | 74.8% | 33.4s |
-| 6000 | 0.7741 | 76.2% | 50.2s |
-| 7800 | 0.7128 | **77.9%** ⭐ | 65.0s |
-| 8000 | 0.7648 | 77.3% | 66.7s |
-
-#### ctx=16, hidden=512, stories=5000, n_steps=8001 (Genuine Learning)
-
-| Step | Loss | Acc | Time |
-| ---: | ---: | ---: | ---: |
-| 0 | 4.2901 | 19.0% | 0.0s |
-| 2000 | 1.0472 | 67.7% | 16.7s |
-| 5000 | 0.9608 | 69.7% | 42.0s |
-| 8000 | 0.9333 | 70.4% | 66.9s |
-
-### Key Findings
-
-> 💡 **`hidden_dim` was the biggest single lever (+5.7%).** The original `hidden=150` was severely undersized — the MLP input is `context_size × embed_dim` features wide, so the hidden layer was a dramatic bottleneck. Doubling to `hidden=512` unlocked the capacity. `hidden=1024` gave only +1% more but cost 2× per step.
-
-> 💡 **`context_size=16` beats `context_size=32` for the MLP.** Transformer attention scales efficiently with context; the MLP input layer size is `context_size × embed_dim`, so doubling context doubles the first linear layer. ctx=32 matched ctx=16's accuracy but took 2.2× longer per step — not worth it.
-
-> 💡 **The memorization trap hits the MLP exactly as hard as the transformer.** On 1k stories the MLP peaks at 77.9% then wobbles. On 5k stories it plateaues at 70.4% with a smooth, stable curve.
-
-> 💡 **Pure MLP matches the transformer at the same data/context scale.** Both architectures hit ~70% on 5k stories with ctx≈16–32. Attention adds no measurable advantage once the dataset is large enough to prevent memorization — at this tiny scale, the information bottleneck dominates everything.
-
-### Canonical `TorchMLP.py` Config
-
-```python
-num_stories  = 5000
-context_size = 16
-embed_dim    = 256
-hidden_dim   = 512
-batch_size   = 2048
-lr           = 1e-3
-n_steps      = 8001
-# eval: fixed 4096-sample subset, torch.Generator(device='cuda')
-```
-**Result: 70.7% in 66.9s** — 8.4 percentage points above the original 62.3% baseline, using a pure two-linear-layer MLP with no attention.
 
 ---
 
@@ -877,7 +901,7 @@ n_steps      = 8001
 
 `TinyLlama.py` rebuilds the transformer using Llama-style components: **RoPE** positional encoding, **RMSNorm** layer normalisation, and **SiLU** activation, plus `torch.compile`.
 
-> 📋 **Benchmark runs are in progress.** Results will appear here once complete. Expected experiments: RoPE vs learned positional embeddings ablation, RMSNorm vs LayerNorm, SiLU vs ReLU, and a head-to-head vs TinyTransformer.py on the Phase 4 canonical config.
+> 📋 **Benchmark runs are in progress.** Results will appear here once complete. Expected experiments: RoPE vs learned positional embeddings ablation, RMSNorm vs LayerNorm, SiLU vs ReLU, and a head-to-head vs TinyTransformer.py on the Phase 3.3 canonical config.
 
 ---
 
