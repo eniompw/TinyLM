@@ -6,10 +6,10 @@ This notebook traces a complete journey from a basic MLP to a BPE transformer �
 
 | Phase | Model | Key Idea | Best Result |
 | :--- | :--- | :--- | :--- |
-| 1 | `TorchMLP.py` | Feedforward baseline — no attention | 70.7% char-level |
-| 2–3 | `SimpleTransformer.py` → `TinyTransformer.py` | Add attention, Keller optimizations | 70.0% (genuine learning) |
-| 4 | `SimpleBPE.py` | Swap tokenizer only — minimal code | 44.4%† in 72.9s |
-| 5 | `TinyBPE.py` | Custom vocab, scaled data | 45.9%† in 140s |
+| 1 | [TorchMLP.py](TorchMLP.py) | Feedforward baseline — no attention | 70.7% char-level |
+| 2–3 | [SimpleTransformer.py](SimpleTransformer.py) → [TinyTransformer.py](TinyTransformer.py) | Add attention, Keller optimizations | 70.0% (genuine learning) |
+| 4 | [SimpleBPE.py](SimpleBPE.py) | Swap tokenizer only — minimal code | 44.4%† in 72.9s |
+| 5 | [TinyBPE.py](TinyBPE.py) | Custom vocab, scaled data | 45.9%† in 140s |
 
 *† BPE accuracy is not comparable to character-level accuracy. Judge it by the [Generated Samples](#-generated-samples-seeing-is-believing).*
 
@@ -59,7 +59,7 @@ In AI it's very easy to fool yourself. Three rules keep our experiments valid:
 
 ## 🧬 Model Lineage: From MLP-Digits to TinyTransformer
 
-`TinyTransformer.py` evolved through three generations, each building directly on the last.
+[TinyTransformer.py](TinyTransformer.py) evolved through three generations, each building directly on the last.
 
 | | `MLP-Digits-Classifier` | `TorchMLP` | `TinyTransformer` |
 | :--- | :--- | :--- | :--- |
@@ -111,7 +111,7 @@ Everything else that's new — 2-layer encoder (4 heads, `ffn_dim=1024`), `torch
 
 ## 🧠 Phase 1: TorchMLP Optimisation (AdamW, Context, Capacity, Data)
 
-*Goal: Start with `TorchMLP.py`, the pure feedforward ancestor of TinyTransformer, before introducing attention.*
+*Goal: Start with [TorchMLP.py](TorchMLP.py), the pure feedforward ancestor of TinyTransformer, before introducing attention.*
 
 *Baseline: SGD lr=0.5, ctx=4, hidden=150, batch=1024, 200 stories, 2001 steps → 62.3%.*
 
@@ -166,7 +166,7 @@ Everything else that's new — 2-layer encoder (4 heads, `ffn_dim=1024`), `torch
 
 > 💡 **Pure MLP matches the transformer at the same data/context scale.** Both architectures hit ~70% on 5k stories with ctx≈16–32. Attention adds no measurable advantage once the dataset is large enough to prevent memorization — at this tiny scale, the information bottleneck dominates everything.
 
-### Canonical `TorchMLP.py` Config
+### Canonical [TorchMLP.py](TorchMLP.py) Config
 
 ```python
 num_stories  = 5000
@@ -186,17 +186,17 @@ n_steps      = 8001
 
 The MLP learning curve is now established in Phase 1. This comparison isolates the architectural transition: adding attention to the character-level baseline.
 
-*Control: `TinyTransformer.py` is a 2-layer transformer with float16 precision, ReLU activation, learned positional embeddings, and an 8-character context window.*
+*Control: [TinyTransformer.py](TinyTransformer.py) is a 2-layer transformer with float16 precision, ReLU activation, learned positional embeddings, and an 8-character context window.*
 
 | Model | Best Accuracy | Steps |
 | :--- | ---: | ---: |
-| TinyMLP.py | 59.4% | 2000 |
-| TorchMLP.py | 62.4% | 2000 |
-| SimpleTransformer.py | 67.2% | 2000 |
-| TinyTransformer.py (2 layers) | 68.4% | 2000 |
+| [TinyMLP.py](TinyMLP.py) | 59.4% | 2000 |
+| [TorchMLP.py](TorchMLP.py) | 62.4% | 2000 |
+| [SimpleTransformer.py](SimpleTransformer.py) | 67.2% | 2000 |
+| [TinyTransformer.py](TinyTransformer.py) (2 layers) | 68.4% | 2000 |
 
 ### First Transformer Learning Curves
-*Goal: Does a basic transformer beat the character-level `SimpleTransformer.py` baseline?*
+*Goal: Does a basic transformer beat the character-level [SimpleTransformer.py](SimpleTransformer.py) baseline?*
 
 | Step | SimpleTrans | **2L (Baseline)** |
 | ---: | ---: | ---: |
@@ -210,9 +210,9 @@ The MLP learning curve is now established in Phase 1. This comparison isolates t
 
 ## 🔧 The Optimization Stack: SimpleTransformer → TinyTransformer
 
-`TinyTransformer.py`'s canonical config adds five optimizations absent from `SimpleTransformer.py`. Each costs 1–2 lines of code:
+[TinyTransformer.py](TinyTransformer.py)'s canonical config adds five optimizations absent from [SimpleTransformer.py](SimpleTransformer.py). Each costs 1–2 lines of code:
 
-| Component | `SimpleTransformer.py` | `TinyTransformer.py` | Accuracy Impact | Speed Impact | Proven By |
+| Component | [SimpleTransformer.py](SimpleTransformer.py) | [TinyTransformer.py](TinyTransformer.py) | Accuracy Impact | Speed Impact | Proven By |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **`torch.compile`** | ✅ Present | ✅ Same | Neutral | ~1.2× faster (after ~32s one-time compile tax) | Phase 3.7: Cold vs Warm ablation |
 | **float16 autocast** | ❌ float32 | ✅ `torch.autocast` on forward + eval | Neutral | Major — halves memory bandwidth; enables batch=1536 + ctx=32 in <2 min | bfloat16 ablation: 4.2× slower for +0.2% |
@@ -227,11 +227,11 @@ The MLP learning curve is now established in Phase 1. This comparison isolates t
 
 ## 🔧 Phase 3: Character-Level Transformer Experiments
 
-This phase introduces attention while retaining character tokens. It starts with the minimal `SimpleTransformer.py` baseline, then scales up through the detailed TinyTransformer experiments below.
+This phase introduces attention while retaining character tokens. It starts with the minimal [SimpleTransformer.py](SimpleTransformer.py) baseline, then scales up through the detailed TinyTransformer experiments below.
 
 ### SimpleTransformer Baseline Tuning (Character-Level)
 
-*Goal: Squeeze maximum accuracy from `SimpleTransformer.py` within a 2-minute Colab budget, changing only hyperparameters — zero new lines of code.*
+*Goal: Squeeze maximum accuracy from [SimpleTransformer.py](SimpleTransformer.py) within a 2-minute Colab budget, changing only hyperparameters — zero new lines of code.*
 
 *Baseline: 2L, ctx=8, 200 stories, batch=1024, lr=1e-3 → 67.2% at step 2000, 36.6s*
 
@@ -243,13 +243,13 @@ This phase introduces attention while retaining character tokens. It starts with
 | + weight_decay=0.01 | 46.0% | 200.8s | ❌ Crushes 128d model — too small for regularisation |
 | + embed_dim=256, ffn=512 (1.6M params) | ~63% | >240s | ❌ Over budget — compile tax ~28s alone |
 
-**New canonical `SimpleTransformer.py` config:** `3L, ctx=32, 5000 stories, batch=1536, lr=2e-3, n_steps=1801, temp=0.5` → **~66.6% in ~151s**
+**New canonical [SimpleTransformer.py](SimpleTransformer.py) config:** `3L, ctx=32, 5000 stories, batch=1536, lr=2e-3, n_steps=1801, temp=0.5` → **~66.6% in ~151s**
 
 > 💡 **`weight_decay` doesn't transfer.** At `embed_dim=128` with only 420K params, `weight_decay=0.01` collapses accuracy to ~46% — the regularisation overwhelms a model this small.
 
 > 💡 **Eval OOM fix.** With `ctx=32` and 5000 stories, evaluating on the full dataset tries to allocate ~62GB. Fix: subsample 4096 rows with a fixed seed (`manual_seed(0)`) — eliminates OOM and stabilises the accuracy curve.
 
-> 💡 **Capacity ceiling confirmed at 420K params.** Accuracy plateaued at ~66–67% from step 1600 onward regardless of further steps. Breaking it requires graduating to `TinyTransformer.py`'s optimizer stack (AdamW + cosine LR + float16).
+> 💡 **Capacity ceiling confirmed at 420K params.** Accuracy plateaued at ~66–67% from step 1600 onward regardless of further steps. Breaking it requires graduating to [TinyTransformer.py](TinyTransformer.py)'s optimizer stack (AdamW + cosine LR + float16).
 
 ---
 
@@ -257,9 +257,9 @@ This phase introduces attention while retaining character tokens. It starts with
 
 This phase keeps the minimal transformer style, but introduces subword BPE tokenization and mixed-precision training.
 
-### SimpleBPE.py — Minimal BPE Baseline
+### [SimpleBPE.py](SimpleBPE.py) — Minimal BPE Baseline
 
-*Goal: Prove the tokenizer swap alone (character → BPE) improves text quality, using `SimpleTransformer.py`'s minimal code style with zero architectural changes.*
+*Goal: Prove the tokenizer swap alone (character → BPE) improves text quality, using [SimpleTransformer.py](SimpleTransformer.py)'s minimal code style with zero architectural changes.*
 
 | Model | Params | Data | Context | Vocab | d_model / heads / layers / FFN | Optimizer | Steps | Time | Loss | Fixed train-sample accuracy |
 |---|---:|---:|---:|---:|---|---|---:|---:|---:|---:|
@@ -291,7 +291,7 @@ This phase keeps the minimal transformer style, but introduces subword BPE token
 
 **Training time: 187.6s** *(over budget)*
 
-> 💡 **batch=2048 is over budget on SimpleBPE.** Unlike `TinyBPE.py` which uses float16, `SimpleBPE.py` runs float32 — so batch=2048 adds ~50% wall-clock time per step for only +0.7% accuracy. Not worth it without float16.
+> 💡 **batch=2048 is over budget on SimpleBPE.** Unlike [TinyBPE.py](TinyBPE.py) which uses float16, [SimpleBPE.py](SimpleBPE.py) runs float32 — so batch=2048 adds ~50% wall-clock time per step for only +0.7% accuracy. Not worth it without float16.
 
 > 💡 **Cosine LR smoothed the tail** (step 1600 loss: 2.66 flat → 2.58 cosine), but the gain was absorbed by the budget overrun.
 
@@ -344,7 +344,7 @@ This phase keeps the minimal transformer style, but introduces subword BPE token
 | AMP, no scaler | float16 | 2048 | No | 43.3% | **70.7s** | ⚠️ Fastest, lower accuracy |
 | **AMP + GradScaler** | **float16** | **2048** | **Yes** | **44.4%** | 72.9s | 🏆 Best SimpleBPE |
 
-**New canonical `SimpleBPE.py` config:** `float16 AMP, GradScaler, batch=2048, lr=2e-3, n_steps=1801` → **44.4% in 72.9s warm-compiled.**
+**New canonical [SimpleBPE.py](SimpleBPE.py) config:** `float16 AMP, GradScaler, batch=2048, lr=2e-3, n_steps=1801` → **44.4% in 72.9s warm-compiled.**
 
 ---
 
@@ -358,26 +358,26 @@ This phase keeps the minimal transformer style, but introduces subword BPE token
 
 | Model | Best Accuracy | Steps | Relative Speed (vs 2L Baseline) |
 | :--- | ---: | ---: | ---: |
-| NameSLP.py | 39.6% | 2000 | 1.8× |
-| TinyMLP.py | 59.4% | 2000 | 0.2× |
-| TorchMLP.py | 62.4% | 2000 | 0.2× |
-| SimpleTransformer.py | 67.2% | 2000 | 1.8× |
-| **TinyTransformer.py (2 layers)** 🥇 | **68.4%** | **2000** | **1.0× (Control)** |
-| TinyTransformer.py (context=64) | 68.5% | 1800 | 10.0× |
-| TinyTransformer.py (Narrow-Deep 4L, 810K params) | 68.9% | 2400 | 3.5× |
-| TinyTransformer.py (Efficient-Deep 4L, ffn=512) | 70.8% | 2000 | 2.3× |
-| TinyTransformer.py (Balanced Narrow-Deep 4L, 192d) | 70.8% | 2400 | 2.9× |
-| TinyTransformer.py (3 layers, Wider FFN=2048) | 71.8% | 2200 | 3.0× |
-| TinyTransformer.py (3 layers, batch=1024, lr=2e-3) | 72.4% | 2200 | 2.5× |
-| TinyTransformer.py (4 layers) | 73.1% | 3400 | 4.0× |
-| TinyTransformer.py (3 layers) | 73.5% | 2200 | 1.5× |
-| TinyTransformer.py (3L, ctx=16, 5000 stories) 🧠 | 71.7% | 2200 | ~2.5× |
-| TinyTransformer.py (3L, ctx=32, 5000 stories, batch=1536) 👑 | 70.0% | 1600 | ~3.2× |
-| TinyTransformer.py (3L, ctx=32, 5000 stories, warmup+clip) | 70.7% | 1600 | ~3.3× |
-| TinyTransformer.py (3L, ctx=32, 5000 stories, batch=2048) | 70.5% | 1600 | ~4.8× |
-| TinyTransformer.py (3L, ctx=32, 5000 stories, 8 heads) | 70.5% | 1800 | ~4.6× |
-| TinyTransformer.py (3L, ctx=32, 5000 stories, embed=320) | 70.5% | 1600 | ~5.5× |
-| **TinyTransformer.py (3L, batch=2048)** | **76.1%** | **2200** | **~3.5×** |
+| [NameSLP.py](NameSLP.py) | 39.6% | 2000 | 1.8× |
+| [TinyMLP.py](TinyMLP.py) | 59.4% | 2000 | 0.2× |
+| [TorchMLP.py](TorchMLP.py) | 62.4% | 2000 | 0.2× |
+| [SimpleTransformer.py](SimpleTransformer.py) | 67.2% | 2000 | 1.8× |
+| **[TinyTransformer.py](TinyTransformer.py) (2 layers)** 🥇 | **68.4%** | **2000** | **1.0× (Control)** |
+| [TinyTransformer.py](TinyTransformer.py) (context=64) | 68.5% | 1800 | 10.0× |
+| [TinyTransformer.py](TinyTransformer.py) (Narrow-Deep 4L, 810K params) | 68.9% | 2400 | 3.5× |
+| [TinyTransformer.py](TinyTransformer.py) (Efficient-Deep 4L, ffn=512) | 70.8% | 2000 | 2.3× |
+| [TinyTransformer.py](TinyTransformer.py) (Balanced Narrow-Deep 4L, 192d) | 70.8% | 2400 | 2.9× |
+| [TinyTransformer.py](TinyTransformer.py) (3 layers, Wider FFN=2048) | 71.8% | 2200 | 3.0× |
+| [TinyTransformer.py](TinyTransformer.py) (3 layers, batch=1024, lr=2e-3) | 72.4% | 2200 | 2.5× |
+| [TinyTransformer.py](TinyTransformer.py) (4 layers) | 73.1% | 3400 | 4.0× |
+| [TinyTransformer.py](TinyTransformer.py) (3 layers) | 73.5% | 2200 | 1.5× |
+| [TinyTransformer.py](TinyTransformer.py) (3L, ctx=16, 5000 stories) 🧠 | 71.7% | 2200 | ~2.5× |
+| [TinyTransformer.py](TinyTransformer.py) (3L, ctx=32, 5000 stories, batch=1536) 👑 | 70.0% | 1600 | ~3.2× |
+| [TinyTransformer.py](TinyTransformer.py) (3L, ctx=32, 5000 stories, warmup+clip) | 70.7% | 1600 | ~3.3× |
+| [TinyTransformer.py](TinyTransformer.py) (3L, ctx=32, 5000 stories, batch=2048) | 70.5% | 1600 | ~4.8× |
+| [TinyTransformer.py](TinyTransformer.py) (3L, ctx=32, 5000 stories, 8 heads) | 70.5% | 1800 | ~4.6× |
+| [TinyTransformer.py](TinyTransformer.py) (3L, ctx=32, 5000 stories, embed=320) | 70.5% | 1600 | ~5.5× |
+| **[TinyTransformer.py](TinyTransformer.py) (3L, batch=2048)** | **76.1%** | **2200** | **~3.5×** |
 
 ### BPE Models †
 
@@ -385,14 +385,14 @@ This phase keeps the minimal transformer style, but introduces subword BPE token
 
 | Model | Best Accuracy† | Steps | Timing |
 | :--- | ---: | ---: | ---: |
-| **SimpleBPE.py (AMP + GradScaler, batch=2048)** ⚡ | **44.4%** | **1801** | Warm: 72.9s; cold: 105.3s |
-| TinyTransformer.py (3L, ctx=32 BPE tiktoken, 5000 stories) 🚀 | 50.9% | 1800 | ~5.3× |
-| TinyTransformer.py (3L, ctx=32 BPE tiktoken, batch=2048) 🏆 | 50.0% | 1200 | ~5.0× |
-| TinyTransformer.py (3L, custom BPE vocab=4000, batch=2048) ⚡ | 46.2% | 900 | ~2.6× |
-| TinyBPE.py (3L, custom BPE vocab=4000, n_steps=1001) 🏆 | ~47% | 1001 | ~2.7× |
-| TinyBPE.py (3L, custom BPE vocab=4000, 10k stories, n_steps=1201) 🏆 | ~45.9% | 1201 | ~3.2× |
-| TinyBPE.py (4L, custom BPE vocab=4000, 10k stories, n_steps=801) | ~44.3% | 801 | ~124s |
-| TinyBPE.py (3L, custom BPE vocab=4000, 10k stories, ctx=64, n_steps=401) | ~37.7% | 401 | ~121s |
+| **[SimpleBPE.py](SimpleBPE.py) (AMP + GradScaler, batch=2048)** ⚡ | **44.4%** | **1801** | Warm: 72.9s; cold: 105.3s |
+| [TinyTransformer.py](TinyTransformer.py) (3L, ctx=32 BPE tiktoken, 5000 stories) 🚀 | 50.9% | 1800 | ~5.3× |
+| [TinyTransformer.py](TinyTransformer.py) (3L, ctx=32 BPE tiktoken, batch=2048) 🏆 | 50.0% | 1200 | ~5.0× |
+| [TinyTransformer.py](TinyTransformer.py) (3L, custom BPE vocab=4000, batch=2048) ⚡ | 46.2% | 900 | ~2.6× |
+| [TinyBPE.py](TinyBPE.py) (3L, custom BPE vocab=4000, n_steps=1001) 🏆 | ~47% | 1001 | ~2.7× |
+| [TinyBPE.py](TinyBPE.py) (3L, custom BPE vocab=4000, 10k stories, n_steps=1201) 🏆 | ~45.9% | 1201 | ~3.2× |
+| [TinyBPE.py](TinyBPE.py) (4L, custom BPE vocab=4000, 10k stories, n_steps=801) | ~44.3% | 801 | ~124s |
+| [TinyBPE.py](TinyBPE.py) (3L, custom BPE vocab=4000, 10k stories, ctx=64, n_steps=401) | ~37.7% | 401 | ~121s |
 
 ---
 
@@ -740,7 +740,7 @@ These experiments build on Phase 4 by scaling BPE models from a GPT-2 tokenizer 
 | 5.4b. Slower LR tail | eta_min → 3e-4 | 46.3% | 104.3s | ❌ Noise |
 | 5.4c. Larger vocab | 4000 → 6000 | 45.6% | 105.8s | ❌ Needs more steps |
 
-**New canonical `TinyBPE.py` config:** `vocab=4000, n_steps=1001, eta_min=1e-4` → Expected accuracy: **~47% at ~116s**.
+**New canonical [TinyBPE.py](TinyBPE.py) config:** `vocab=4000, n_steps=1001, eta_min=1e-4` → Expected accuracy: **~47% at ~116s**.
 
 > ⚠️ **Superseded by Phase 5.5.** The canonical config was updated in Phase 5.5 to use `num_stories=10000, n_steps=1201`. See [Phase 5.5 Verdict](#-phase-55-verdict) for the current default.
 
@@ -817,7 +817,7 @@ These experiments build on Phase 4 by scaling BPE models from a GPT-2 tokenizer 
 | 5.5e. ctx=64 | context_size 32→64 | 37.7% | 121s | ⚠️ Better quality, too slow for full run |
 | 5.5f. Larger vocab | vocab 4000→6000 | 45.0% | 189s | ❌ Needs 250s to converge |
 
-**New canonical `TinyBPE.py` config:** `vocab=4000, num_stories=10000, n_steps=1201, eta_min=1e-4` → Expected accuracy: **~45.9%† at ~140s**.
+**New canonical [TinyBPE.py](TinyBPE.py) config:** `vocab=4000, num_stories=10000, n_steps=1201, eta_min=1e-4` → Expected accuracy: **~45.9%† at ~140s**.
 
 *† Not comparable to character-level rows — BPE predicts 1 of 4,000 tokens vs 1 of 65 characters.*
 
@@ -908,46 +908,46 @@ These experiments build on Phase 4 by scaling BPE models from a GPT-2 tokenizer 
 
 ---
 
-## 🦙 TinyLlama.py — Modern Architecture (Benchmarks Pending)
+## 🦙 [TinyLlama.py](TinyLlama.py) — Modern Architecture (Benchmarks Pending)
 
-`TinyLlama.py` rebuilds the transformer using Llama-style components: **RoPE** positional encoding, **RMSNorm** layer normalisation, and **SiLU** activation, plus `torch.compile`.
+[TinyLlama.py](TinyLlama.py) rebuilds the transformer using Llama-style components: **RoPE** positional encoding, **RMSNorm** layer normalisation, and **SiLU** activation, plus `torch.compile`.
 
-> 📋 **Benchmark runs are in progress.** Results will appear here once complete. Expected experiments: RoPE vs learned positional embeddings ablation, RMSNorm vs LayerNorm, SiLU vs ReLU, and a head-to-head vs TinyTransformer.py on the Phase 3.3 canonical config.
+> 📋 **Benchmark runs are in progress.** Results will appear here once complete. Expected experiments: RoPE vs learned positional embeddings ablation, RMSNorm vs LayerNorm, SiLU vs ReLU, and a head-to-head vs [TinyTransformer.py](TinyTransformer.py) on the Phase 3.3 canonical config.
 
 ---
 
 ## 📖 Generated Samples (Seeing is Believing)
 
-**TinyMLP.py (59.4% — Letters work, words are broken)**
+**[TinyMLP.py](TinyMLP.py) (59.4% — Letters work, words are broken)**
 > `Once tichec. Ther. She said outned. Sker to. Hif even very the box. It. I mesis momors.`
 
-**SimpleTransformer.py (67.2% — Almost real sentences)**
+**[SimpleTransformer.py](SimpleTransformer.py) (67.2% — Almost real sentences)**
 > `Once there was a faster. They learned the pusiade of the yell socked up and played together.`
 
-**TinyTransformer.py — 3L, batch=2048 (76.1% — Highest raw score, but cheats)**
+**[TinyTransformer.py](TinyTransformer.py) — 3L, batch=2048 (76.1% — Highest raw score, but cheats)**
 > `Once there was a little girl named Lily. She saw the new toy. He liked to play with her mom smiled and said, "Hello, Spot saw Tom was very happy with the cake was so smaller saw a big that she was happy`
 *(Starts well, turns into word salad — it memorized patterns, not grammar.)*
 
-**TinyTransformer.py — 3L, 2048 batch, 3k stories (71.4% — Generalisation Win)**
+**[TinyTransformer.py](TinyTransformer.py) — 3L, 2048 batch, 3k stories (71.4% — Generalisation Win)**
 > `Once there was a great time and she was green and strong. Tim and Sue were so happy that the box opened the bug friends. She was sad and looked for them.`
 *(Clauses flow much better — structure learned, not just words memorized.)*
 
-**TinyTransformer.py — 3L, 1536 batch, 5k stories, ctx=32 (70.0% — Simplicity Champion 👑)**
+**[TinyTransformer.py](TinyTransformer.py) — 3L, 1536 batch, 5k stories, ctx=32 (70.0% — Simplicity Champion 👑)**
 > `Once there was a little boy named Tim. He was so happy. The dog was scared and happy. They saw a little girl who liver seen the ball. She lived in a big branch with the ball and went to the park.`
 *(Cleanest code, fastest training at 127.7s, same ~70% ceiling as more complex variants.)*
 
-**TinyTransformer.py — 3L, BPE tiktoken, ctx=32 tokens (50.9%† — Ceiling Broken 🚀)**
+**[TinyTransformer.py](TinyTransformer.py) — 3L, BPE tiktoken, ctx=32 tokens (50.9%† — Ceiling Broken 🚀)**
 > `Once there was a little boy named Jack. He was only three years old and had lots of things he wanted to do. One day he saw something very special and he wanted to take it home.`
 > `His mom said, "Mom, can you have some cookies?"`
 > `Sam smiled and nodded. He said, "Yes, please. I will be careful."`
 *(Full multi-paragraph structure, working dialogue, consistent pronouns — the ceiling is gone.)*
 
-**TinyTransformer.py — 3L, BPE tiktoken, batch=2048, 1401 steps (50.0%† — Short-Budget BPE Champion 🏆)**
+**[TinyTransformer.py](TinyTransformer.py) — 3L, BPE tiktoken, batch=2048, 1401 steps (50.0%† — Short-Budget BPE Champion 🏆)**
 > `Once there was a little boy named Jack. He was only three years old and had lots of things he wanted to do. One day he saw something very special and he couldn't wait to find out he was very excited.`
 > `The little boy was so excited! He decided to take the track home, and soon enough he got to his mom and said, "Let's go home now!"`
 *(Full paragraphs and dialogue, reached in fewer steps — best speed/quality tradeoff for BPE.)*
 
-**TinyTransformer.py — 3L, custom BPE vocab=4000, batch=2048, 901 steps (46.2%† — 2-Min Champion ⚡)**
+**[TinyTransformer.py](TinyTransformer.py) — 3L, custom BPE vocab=4000, batch=2048, 901 steps (46.2%† — 2-Min Champion ⚡)**
 > `Once there was a little boy named Jack. He was only three years old and had lots of things he wanted to do. One day he saw something very special.`
 > `The boy's parents had an idea. He felt so happy, and he wore a nice story together.`
 > `Once upon a time, there was a little dog named Max. Max was a very good friend.`
