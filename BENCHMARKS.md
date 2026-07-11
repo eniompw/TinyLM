@@ -19,7 +19,7 @@ Our baseline model is **TinyTransformer.py** — a 2-layer transformer with floa
 - [🔬 Ablation & Experiment Summary](#-ablation--experiment-summary)
 - [📈 Step-by-Step Accuracy Data](#-step-by-step-accuracy-data)
 - [⚡ SimpleBPE AMP Optimisation](#-simplebpe-amp-optimisation)
-- [� Phase 12: TinyBPE Optimisation](#-phase-12-tinybpe-optimisation-steps-lr-tail-vocab-size)
+- [🔬 Phase 12: TinyBPE Optimisation](#-phase-12-tinybpe-optimisation-steps-lr-tail-vocab-size)
 - [🚀 Phase 13: TinyBPE Scale-Up (10k Stories, Depth, Context)](#phase-13-tinybpe-scale-up-10k-stories-depth-context)
 - [�📝 Experiment & Ablation Details](#-experiment--ablation-details)
 - [📖 Generated Samples](#-generated-samples-seeing-is-believing)
@@ -303,6 +303,8 @@ Everything else that's new — the 2-layer encoder (4 heads, `ffn_dim=1024`), `t
 | **TinyTransformer.py (3L, custom BPE vocab=4000, 5000 stories, batch=2048)** ⚡ | **46.2%†** | **900** | **~2.6×** |
 | **TinyBPE.py (3L, custom BPE vocab=4000, n_steps=1001)** 🏆 | **~47%†** | **1001** | **~2.7×** |
 | **TinyBPE.py (3L, custom BPE vocab=4000, 10k stories, n_steps=1201)** 🏆 | **~45.9%†** | **1201** | **~3.2×** |
+| TinyBPE.py (4L, custom BPE vocab=4000, 10k stories, n_steps=801) | ~44.3%† | 801 | ~124s |
+| TinyBPE.py (3L, custom BPE vocab=4000, 10k stories, ctx=64, n_steps=401) | ~37.7%† | 401 | ~121s |
 
 *† Accuracy is not comparable to character-level rows: BPE models predict tokens from vocabularies of 4,000 or 50,257 tokens, rather than 65 characters. SimpleBPE's score is additionally measured on a fixed sample of training contexts, not a held-out split. See generated samples for quality assessment.*
 
@@ -723,6 +725,10 @@ All tests below are single changes made to our baseline 2-layer TinyTransformer 
 
 **New canonical `TinyBPE.py` config:** `vocab=4000, n_steps=1001, eta_min=1e-4` — all other hyperparameters unchanged. Expected accuracy: **~47%** at **~116s**.
 
+> ⚠️ **Phase 12 config superseded by Phase 13.** The canonical `TinyBPE.py` config was updated
+> in Phase 13 to use `num_stories=10000, n_steps=1201` after testing on a larger dataset.
+> See [Phase 13 Verdict](#-phase-13-verdict--new-canonical-config) for the current default.
+
 ---
 
 ## Phase 13: TinyBPE Scale-Up (10k Stories, Depth, Context)
@@ -939,6 +945,17 @@ All tests below are single changes made to our baseline 2-layer TinyTransformer 
 - **Change:** Trained a BPE tokenizer from scratch on the TinyStories corpus (HuggingFace `tokenizers`, `vocab_size=4000`) instead of using GPT-2's pretrained 50,257-token vocab. Added logit softcapping (±15) for stability.
 - **Result:** 4,429,472 params (down from 28,159,313), 46.2% accuracy at step 900, 103.6s total training time.
 - **Takeaway:** GPT-2's vocab is built for general English text, not a 1,500-word children's-story corpus. A right-sized vocabulary cuts embedding parameters by 84% and roughly halves training time, at a modest accuracy cost versus the oversized vocab. This is the best speed/size tradeoff in the BPE family so far.
+
+---
+
+## 🦙 TinyLlama.py — Modern Architecture (Benchmarks Pending)
+
+`TinyLlama.py` rebuilds the transformer using Llama-style components: **RoPE** positional encoding,
+**RMSNorm** layer normalisation, and **SiLU** activation. It also uses `torch.compile` for a GPU speedup.
+
+> 📋 **Benchmark runs for TinyLlama.py are in progress.** Results will appear here once complete.
+> Expected experiments: RoPE vs learned positional embeddings ablation, RMSNorm vs LayerNorm,
+> SiLU vs ReLU, and a head-to-head vs TinyTransformer.py on the Phase 4 canonical config.
 
 ---
 

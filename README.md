@@ -23,14 +23,14 @@ We didn't start with a complex AI — we built up to it, upgrading one thing at 
 ### Level 2: Enter the Transformer (The "Brain" Upgrade)
 
 - **[SimpleTransformer.py](SimpleTransformer.py) — The Bridge:** Adds a 3-layer Transformer Encoder on top of the PyTorch MLP. This gives the model *attention* — the ability to read the whole context window, not just the last few letters.
-- **[SimpleBPE.py](SimpleBPE.py) — The Tokenizer Swap:** Keeps `SimpleTransformer.py`'s minimal code but replaces character-level tokens with a custom BPE tokenizer (vocab=4000). A context window of 32 BPE tokens covers ~20 words instead of ~5 characters — breaking the information ceiling with zero architectural changes.
+- **[SimpleBPE.py](SimpleBPE.py) — The Tokenizer Swap:** Keeps `SimpleTransformer.py`'s minimal code but replaces character-level tokens with a custom BPE tokenizer (vocab=4000). A context window of 32 BPE tokens covers ~20 words instead of ~5 characters — breaking the information ceiling with zero architectural changes. Best config: float16 AMP + GradScaler, batch=2048 → **44.4% in ~73s** (see BENCHMARKS.md).
 - **[TinyTransformer.py](TinyTransformer.py) — The Workhorse:** Our baseline for all experiments in BENCHMARKS.md. Adds mixed precision (float16) and a cosine learning rate schedule for faster, more stable training.
 - **[TinyTransformerClass.py](TinyTransformerClass.py) — The Cleanup:** Identical to the above, reorganized using Object-Oriented Programming (OOP) to match standard professional PyTorch style.
 
 ### Level 3: Modern AI (Llama Architecture & Subword Tokenization)
 
 - **[TinyLlama.py](TinyLlama.py) — The Modern Era:** Rebuilds the model using the same architectural tricks as Meta's Llama. Swaps in **RoPE** (smarter positional encoding), **RMSNorm** (better layer normalization), and **SiLU** (a smoother activation function). Uses `torch.compile` for a significant GPU speedup.
-- **[TinyBPE.py](TinyBPE.py) — The Tokenizer Upgrade:** Replaces character-level tokenization with a custom **BPE (Byte-Pair Encoding)** tokenizer trained directly on TinyStories. A context window of 32 BPE tokens now covers ~20 words instead of ~5 characters — breaking the information ceiling that all character-level models share. Same architecture as `TinyTransformer.py`, smarter data.
+- **[TinyBPE.py](TinyBPE.py) — The Tokenizer Upgrade:** Replaces character-level tokenization with a custom **BPE (Byte-Pair Encoding)** tokenizer trained directly on TinyStories. A context window of 32 BPE tokens now covers ~20 words instead of ~5 characters — breaking the information ceiling that all character-level models share. Same architecture as `TinyTransformer.py`, smarter data. Best config: vocab=4000, 10k stories, n_steps=1201 → **~45.9%† in ~140s** (see BENCHMARKS.md).
 
 ---
 
@@ -50,6 +50,7 @@ We didn't start with a complex AI — we built up to it, upgrading one thing at 
 | [TorchMLP-Explained.md](TorchMLP-Explained.md) | Walkthrough of `TorchMLP.py`: the PyTorch rewrite and autograd. |
 | [SimpleTransformer-explained.md](SimpleTransformer-explained.md) | Walkthrough of the MLP → Transformer transition. |
 | [TinyTransformer-explained.md](TinyTransformer-explained.md) | Walkthrough of architecture choices and speed/quality optimizations. |
+| TinyLlama-explained.md | *(Coming soon)* — Walkthrough of RoPE, RMSNorm, and SiLU in the Llama-style architecture. |
 
 ---
 
