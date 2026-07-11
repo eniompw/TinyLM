@@ -18,6 +18,7 @@ Our baseline model is **TinyTransformer.py** — a 2-layer transformer with floa
 - [⚠️ The Memorization Trap](#️-the-memorization-trap)
 - [🔬 Ablation & Experiment Summary](#-ablation--experiment-summary)
 - [📈 Step-by-Step Accuracy Data](#-step-by-step-accuracy-data)
+- [⚡ SimpleBPE AMP Optimisation](#-simplebpe-amp-optimisation)
 - [� Phase 12: TinyBPE Optimisation](#-phase-12-tinybpe-optimisation-steps-lr-tail-vocab-size)
 - [🚀 Phase 13: TinyBPE Scale-Up (10k Stories, Depth, Context)](#phase-13-tinybpe-scale-up-10k-stories-depth-context)
 - [�📝 Experiment & Ablation Details](#-experiment--ablation-details)
@@ -155,11 +156,14 @@ Everything else that's new — the 2-layer encoder (4 heads, `ffn_dim=1024`), `t
 - Architecture: 3-layer PyTorch `TransformerEncoder`, Pre-LN (`norm_first=True`), zero dropout.
 - Optimizer: `AdamW(params, lr=2e-3)`; PyTorch's default `weight_decay` is `0.01`.
 - The reported metric is sampled training-context next-token accuracy, **not** held-out validation or test accuracy. The fixed subset reliably shows within-run learning progress only.
-- Throughput: 13.5 steps/s (0.0741 s/step).
+- Float32 baseline throughput: 13.5 steps/s (0.0741 s/step).
+- AMP + GradScaler throughput: 24.7 steps/s warm-compiled (0.0405 s/step).
 - Learning curve: 0.5% at step 0, 30.6% at step 200, 39.4% at step 1200, and 42.6% at step 1800.
 - Qualitative sample: coherent short-story syntax, but semantic errors remain (for example, "bouncy glass").
 
 > ⚠️ **Environment note:** Record the GPU model, PyTorch/CUDA versions, and whether `torch.compile` was enabled beside future benchmark results. A seed improves repeatability but does not guarantee identical results across platforms, versions, or some CUDA operations.
+>
+> - Timing convention: report both cold total time (includes `torch.compile`) and warm-compiled time when available; never compare them as if they were the same measurement.
 
 ### Optimisation attempt: batch=2048 + cosine LR, n_steps=1601
 
@@ -185,19 +189,98 @@ Everything else that's new — the 2-layer encoder (4 heads, `ffn_dim=1024`), `t
 
 > 💡 **`SimpleTransformer.py` → `SimpleBPE.py` is the clearest demonstration in the repo** that the ~67% character-level ceiling is an information bottleneck, not a model capacity problem. No new code required.
 
+### ⚡ SimpleBPE AMP Optimisation
+
+*Goal: Test whether TinyBPE-style float16 mixed precision makes SimpleBPE faster within its minimal-code philosophy.*
+
+*Control: float32, batch=1536, flat AdamW lr=2e-3, 1801 steps → 42.6% in 133.5s.*
+
+### 1. AMP + GradScaler + batch=2048
+
+*Changes from control: float32 → float16 AMP + GradScaler; batch=1536 → 2048. Model, tokenizer, data, LR, and steps unchanged. This is a combined speed experiment: it does not isolate the separate accuracy effects of AMP and batch size.*
+
+| Step | Loss | Acc | Time |
+| ---: | ---: | ---: | ---: |
+| 0 | 8.8046 | 0.3% | 0.1s |
+| 200 | 3.5113 | 31.1% | 7.9s |
+| 400 | 3.1565 | 35.6% | 16.0s |
+| 600 | 3.0252 | 37.0% | 24.1s |
+| 800 | 2.8266 | 38.9% | 32.3s |
+| 1000 | 2.7466 | 40.6% | 40.7s |
+| 1200 | 2.6808 | 40.7% | 48.8s |
+| 1400 | 2.5269 | 41.9% | 57.0s |
+| 1600 | 2.5827 | 42.7% | 65.0s |
+| 1800 | 2.5454 | **44.4%** ⭐ | 72.9s |
+
+**Training time: 72.9s** *(warm-compiled)*
+
+> 💡 **New SimpleBPE best.** float16 AMP + GradScaler with batch=2048 reaches **44.4%**, versus **42.6%** for the float32/batch-1536 control, while reducing warm-compiled time from **133.5s to 72.9s** (**1.83× faster**).
+>
+> 💡 **AMP makes the large batch practical.** The earlier float32 batch=2048 run required 187.6s. The AMP version completes the same 1801-step budget in 72.9s warm-compiled.
+>
+> ⚠️ **Do not over-attribute the gain.** This run changes both precision and batch size. It establishes the best practical configuration, not whether AMP or batch=2048 individually caused the accuracy improvement.
+
+**Generated sample:**
+> `. The ball flew away, and the ball fell down. The ball popped and said, "I can help you, but I am happy too. I am`
+
+### 2. Ablation: Remove GradScaler
+
+*Single change from AMP best: remove `GradScaler`; replace scaled backward/step with standard `loss.backward()` and `optimizer.step()`. Float16 AMP, batch=2048, flat lr=2e-3, 1801 steps, seed, fixed evaluation subset, and warm compilation remain unchanged.*
+
+| Step | Loss | Acc | Time |
+| ---: | ---: | ---: | ---: |
+| 0 | 8.8046 | 0.3% | 0.1s |
+| 200 | 3.5250 | 30.9% | 7.7s |
+| 400 | 3.1719 | 35.4% | 15.6s |
+| 600 | 3.0377 | 37.2% | 23.8s |
+| 800 | 2.8601 | 38.7% | 31.9s |
+| 1000 | 2.7491 | 40.2% | 40.0s |
+| 1200 | 2.6911 | 40.1% | 47.8s |
+| 1400 | 2.5486 | 42.3% | 55.5s |
+| 1600 | 2.6173 | 42.8% | 63.1s |
+| 1800 | 2.5371 | **43.3%** ⭐ | 70.7s |
+
+**Training time: 70.7s** *(warm-compiled)*
+
+> 💡 **GradScaler is worth keeping.** Removing it saves just **2.2s** (72.9s → 70.7s) but lowers final accuracy by **1.1 percentage points** (44.4% → 43.3%).
+>
+> 💡 **No-scaler training is stable, not optimal.** Loss stays finite and the model learns, but the scaled run is consistently ahead in the late-training checkpoints. Gradient scaling exists to protect small float16 gradients from underflow.
+
+**Generated sample:**
+> `ball.Once upon a time, there was a little girl called Lucy. She loved to play with a big, red ball. One day, Fox went`
+
+### ✅ SimpleBPE Verdict
+
+| Variant | Precision | Batch | GradScaler | Acc | Warm time | Verdict |
+| :--- | :--- | ---: | :--- | ---: | ---: | :--- |
+| Original baseline | float32 | 1536 | No | 42.6% | 133.5s | Control |
+| Float32 + cosine | float32 | 2048 | No | 42.9% | 187.6s | ❌ Over budget |
+| AMP, no scaler | float16 | 2048 | No | 43.3% | **70.7s** | ⚠️ Fastest, lower accuracy |
+| **AMP + GradScaler** | **float16** | **2048** | **Yes** | **44.4%** | 72.9s | 🏆 Best SimpleBPE |
+
+**New canonical `SimpleBPE.py` config:** `float16 AMP, GradScaler, batch=2048, lr=2e-3, n_steps=1801` → **44.4% fixed train-sample accuracy in 72.9s warm-compiled**.
+
+### What the experiments establish
+
+- **AMP + GradScaler + batch 2048 is the new practical SimpleBPE champion**: 44.4% in 72.9s warm-compiled.
+- **`GradScaler` is independently validated**: retaining it costs 2.2 seconds but gains 1.1 points against the exact no-scaler ablation.
+- **The scaler is compact**: one setup line and a longer existing optimizer line, rather than a large framework addition.
+- **Sample quality is supporting evidence only**: each generation is stochastic, starts from context-derived text, and should not be treated as a head-to-head quality score. The fixed 4,096-context metric is the controlled comparison.
+- **A missing clean ablation remains**: AMP at `batch_size=1536` would isolate the precision effect; batch 2048 float32 already exists, but it is not enough to disentangle the interaction fully. PyTorch’s float16 AMP recipe normally uses both autocast and gradient scaling, consistent with the measured result here.[[docs.pytorch](https://docs.pytorch.org/docs/stable/amp.html)]
+
 ---
 
 ## 📊 The Leaderboard: Model Comparison
 
-*Best configuration for each architecture we tested.*
+*Best configuration for each architecture we tested. Relative speeds use the 2-layer baseline; SimpleBPE reports explicit warm/cold timing instead because its timing convention differs.*
 
-| Model | Best Accuracy | Steps Taken | Relative Speed (vs 2L Baseline) |
+| Model | Best Accuracy | Steps Taken | Relative Speed (vs 2L Baseline) or Timing |
 | :--- | ---: | ---: | ---: |
 | NameSLP.py | 39.6% | 2000 | 1.8× |
 | TinyMLP.py | 59.4% | 2000 | 0.2× |
 | TorchMLP.py | 62.4% | 2000 | 0.2× |
 | SimpleTransformer.py | 67.2% | 2000 | 1.8× |
-| SimpleBPE.py (fixed train-sample accuracy) | 42.6%† | 1801 | ~3.6× |
+| **SimpleBPE.py (AMP + GradScaler, batch=2048)** ⚡ | **44.4%†** | **1801** | **Warm: 72.9s; cold: 105.3s** |
 | **TinyTransformer.py (2 layers)** 🥇 | **68.4%** | **2000** | **1.0× (Control)** |
 | TinyTransformer.py (context=64) | 68.5% | 1800 | 10.0× |
 | TinyTransformer.py (Narrow-Deep 4L, 810K params) | 68.9% | 2400 | 3.5× |
