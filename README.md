@@ -7,6 +7,8 @@ The code is intentionally kept short so you can read the entire training and tex
 > 🧠 **Prerequisite:** Check out [MLP-Digits-Classifier](https://github.com/eniompw/MLP-Digits-Classifier) first to see how neural networks classify images. TinyLM takes those same concepts and applies them to generating text!
 >
 > 🚀 **What's Next?** This series continues with [MicroGPT](https://github.com/eniompw/MicroGPT), where we scale up to a full, modern decoder-only transformer.
+>
+> 🔬 **Beyond Manual Experiments:** After 60+ manual experiments documented in [BENCHMARKS.md](BENCHMARKS.md), it became clear that automating hyperparameter search was the logical next step. This led to building [AutoResearch](https://github.com/eniompw/AutoResearch) — a framework for systematic, automated hyperparameter tuning.
 
 ---
 
